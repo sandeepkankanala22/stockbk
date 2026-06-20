@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import routes from './routes/index.js';
@@ -21,16 +22,24 @@ app.get('/health', (_req, res) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
-  app.use(express.static(frontendDist));
-  app.get('*', (req, res, next) => {
-    if (req.path.startsWith('/api') || req.path === '/health') {
-      return next();
-    }
-    res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
-      if (err) next(err);
+  const candidates = [
+    path.resolve(process.cwd(), 'frontend/dist'),
+    path.resolve(__dirname, '../../frontend/dist'),
+  ];
+  const frontendDist = candidates.find((dir) => fs.existsSync(path.join(dir, 'index.html')));
+  if (frontendDist) {
+    app.use(express.static(frontendDist));
+    app.get('*', (req, res, next) => {
+      if (req.path.startsWith('/api') || req.path === '/health') {
+        return next();
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+        if (err) next(err);
+      });
     });
-  });
+  } else {
+    console.warn('frontend/dist not found — API only mode');
+  }
 }
 
 app.use(notFoundHandler);

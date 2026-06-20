@@ -1,0 +1,18 @@
+run = "npm run dev"
+entrypoint = "backend/src/index.ts"
+modules = ["nodejs-20"]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["npm", "run", "build"]
+run = ["npm", "start"]
+
+[[ports]]
+localPort = 3001
+externalPort = 80
+
+[env]
+NODE_ENV = "production"
