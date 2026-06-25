@@ -18,4 +18,7 @@ export const config = {
   screenerAnnouncementLagDays: 45,
   /** Only attach QOQ/YOY fundamentals when price is within this % of buy price */
   fundamentalsPriceBandPct: 15,
+  scannerConcurrency: 4,
+  scannerHistoryStartDate: '2004-01-01',
+  scannerSymbolCacheHours: 24,
 };

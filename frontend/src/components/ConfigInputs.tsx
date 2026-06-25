@@ -57,6 +57,34 @@ export default function ConfigInputs({ config, onChange, disabled }: ConfigInput
             helperText="Capital deployed per trade (used for P&L, ROI, CAGR)"
           />
         </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            label="Near Buy Band — Plus %"
+            type="number"
+            inputProps={{ min: 0, max: 100, step: 0.1 }}
+            value={config.nearBuyPlusPct}
+            disabled={disabled}
+            onChange={(e) =>
+              onChange({ ...config, nearBuyPlusPct: parseFloat(e.target.value) || 0 })
+            }
+            helperText="Distance to +% band from buy (Top 10 & Dist column)"
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            fullWidth
+            label="Near Buy Band — Minus %"
+            type="number"
+            inputProps={{ min: 0, max: 100, step: 0.1 }}
+            value={config.nearBuyMinusPct}
+            disabled={disabled}
+            onChange={(e) =>
+              onChange({ ...config, nearBuyMinusPct: parseFloat(e.target.value) || 0 })
+            }
+            helperText="Distance to -% band from buy (Top 10 & Dist column)"
+          />
+        </Grid>
         <Grid item xs={12}>
           <TextField
             fullWidth

@@ -7,7 +7,7 @@ import type {
   TradeResult,
 } from '../types/index.js';
 import { startOfMonthIso, todayIso } from '../utils/dateParser.js';
-import { toYahooSymbol } from '../utils/symbolUtils.js';
+import { toYahooSymbols } from '../utils/symbolUtils.js';
 import { featureEngine } from '../ml/FeatureEngine.js';
 import { logisticModel, type StoredModel } from '../ml/LogisticModel.js';
 import { modelStore } from '../ml/modelStore.js';
@@ -156,12 +156,15 @@ export class MlService {
   }
 
   private async getBarsForTrade(trade: TradeResult) {
-    const yahooSymbol = toYahooSymbol(trade.symbol);
     const period1 = startOfMonthIso(trade.minDate);
     const period2 = todayIso();
-    const memory = cacheService.get(yahooSymbol, period1, period2);
-    if (memory) return memory;
-    return cacheService.getFromDisk(yahooSymbol);
+    for (const yahooSymbol of toYahooSymbols(trade.symbol)) {
+      const memory = cacheService.get(yahooSymbol, period1, period2);
+      if (memory) return memory;
+      const disk = await cacheService.getFromDisk(yahooSymbol);
+      if (disk && disk.length > 0) return disk;
+    }
+    return undefined;
   }
 
   private toModelInfo(stored: StoredModel): ModelInfo {

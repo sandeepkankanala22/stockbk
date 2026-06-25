@@ -30,6 +30,9 @@ const RESULT_COLUMNS = [
   'Recovery Date',
   '2nd SL Hit',
   '2nd SL Hit Date',
+  'Latest Close',
+  '% From Buy',
+  'Dist to Near Band',
 ];
 
 function tradeToRow(result: TradeResult): (string | number | null)[] {
@@ -62,6 +65,9 @@ function tradeToRow(result: TradeResult): (string | number | null)[] {
     result.recoveryDate,
     result.secondStoplossHit == null ? null : result.secondStoplossHit ? 'Yes' : 'No',
     result.secondStoplossHitDate,
+    result.latestClosePrice,
+    result.pctFromBuyPrice,
+    result.distToNearBand,
   ];
 }
 

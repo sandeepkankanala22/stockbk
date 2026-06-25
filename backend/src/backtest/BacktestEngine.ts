@@ -9,6 +9,7 @@ import { config as appConfig } from '../config/defaults.js';
 import { excelParserService } from '../services/excelParserService.js';
 import { yahooFinanceService } from '../services/yahooFinanceService.js';
 import { toYahooSymbol } from '../utils/symbolUtils.js';
+import { priceMetricsFromBars } from '../utils/tradePriceUtils.js';
 import {
   calculateMonthHigh,
   findBreakoutDate,
@@ -20,13 +21,14 @@ import {
   analyzeHitSequence,
   analyzeScenario2Recovery,
 } from './stoplossAnalysis.js';
+import { analyzeInvestorPaths } from './investorPathAnalysis.js';
+import { buildAthEvents, buildPricePath } from './pricePathBuilder.js';
 
 export type ProgressCallback = (completed: number, total: number, currentSymbol: string) => void;
 
 export class BacktestEngine {
   extractUniqueSymbols(rows: InputRow[]): SymbolJob[] {
-    const minDates = excelParserService.extractUniqueSymbols(rows);
-    return Array.from(minDates.entries()).map(([symbol, minDate]) => ({
+    return excelParserService.extractSymbolJobs(rows).map(({ symbol, minDate }) => ({
       symbol,
       minDate,
       yahooSymbol: toYahooSymbol(symbol),
@@ -49,6 +51,9 @@ export class BacktestEngine {
       monthHighDate: null,
       breakoutCandleHigh: null,
       exitPrice: null,
+      latestClosePrice: null,
+      pctFromBuyPrice: null,
+      distToNearBand: null,
       investmentAmount: null,
       exitValue: null,
       pnl: null,
@@ -70,10 +75,21 @@ export class BacktestEngine {
       recoveryDate: null,
       secondStoplossHit: null,
       secondStoplossHitDate: null,
+      newAthAfterFtt: null,
+      lowHitBuyAfterFtt: null,
+      lowHitSlAfterFtt: null,
+      targetAfterRecovery: null,
+      newAthAfterRecoveryTarget: null,
+      newAthAfterFttDate: null,
+      lowHitBuyAfterFttDate: null,
+      targetAfterRecoveryDate: null,
+      newAthAfterRecoveryTargetDate: null,
+      pricePath: null,
+      athEvents: null,
     };
 
-    const { bars, error } = await yahooFinanceService.fetchHistoricalData(
-      symbolJob.yahooSymbol,
+    const { bars, error } = await yahooFinanceService.fetchForSymbol(
+      symbolJob.symbol,
       symbolJob.minDate
     );
 
@@ -102,6 +118,12 @@ export class BacktestEngine {
     const buyPrice = roundPrice(monthHigh.price);
     const targetPrice = roundPrice(calculateTargetPrice(buyPrice, config.targetPercent));
     const stoplossPrice = roundPrice(calculateStoplossPrice(buyPrice, config.stoplossPercent));
+    const priceMetrics = priceMetricsFromBars(
+      buyPrice,
+      bars,
+      config.nearBuyPlusPct,
+      config.nearBuyMinusPct
+    );
 
     const startScanDate = findFirstTradingDayNextMonth(bars, symbolJob.minDate);
     if (!startScanDate) {
@@ -112,6 +134,7 @@ export class BacktestEngine {
         stoplossPrice,
         monthHighDate: monthHigh.date,
         result: 'NO_BREAKOUT',
+        ...priceMetrics,
       };
     }
 
@@ -124,6 +147,7 @@ export class BacktestEngine {
         stoplossPrice,
         monthHighDate: monthHigh.date,
         result: 'NO_BREAKOUT',
+        ...priceMetrics,
       };
     }
 
@@ -150,6 +174,13 @@ export class BacktestEngine {
       targetPrice,
       config.sameDayHitMode
     );
+    const investorPaths = analyzeInvestorPaths(
+      bars,
+      buyPrice,
+      targetPrice,
+      hitSeq,
+      scenario2
+    );
 
     let exitPrice: number | null = null;
     if (evaluation.result === 'TARGET') {
@@ -172,6 +203,7 @@ export class BacktestEngine {
       monthHighDate: monthHigh.date,
       breakoutCandleHigh: roundPrice(breakout.high),
       exitPrice,
+      ...priceMetrics,
       stoplossHitTillDate: hitSeq.stoplossHitTillDate,
       stoplossHitDate: hitSeq.stoplossHitDate,
       stoplossHitDays: hitSeq.stoplossHitDays,
@@ -189,6 +221,17 @@ export class BacktestEngine {
       recoveryDate: scenario2?.recoveryDate ?? null,
       secondStoplossHit: scenario2?.secondStoplossHit ?? null,
       secondStoplossHitDate: scenario2?.secondStoplossHitDate ?? null,
+      newAthAfterFtt: investorPaths.newAthAfterFtt,
+      lowHitBuyAfterFtt: investorPaths.lowHitBuyAfterFtt,
+      lowHitSlAfterFtt: investorPaths.lowHitSlAfterFtt,
+      targetAfterRecovery: investorPaths.targetAfterRecovery,
+      newAthAfterRecoveryTarget: investorPaths.newAthAfterRecoveryTarget,
+      newAthAfterFttDate: investorPaths.newAthAfterFttDate,
+      lowHitBuyAfterFttDate: investorPaths.lowHitBuyAfterFttDate,
+      targetAfterRecoveryDate: investorPaths.targetAfterRecoveryDate,
+      newAthAfterRecoveryTargetDate: investorPaths.newAthAfterRecoveryTargetDate,
+      pricePath: buildPricePath(bars, breakout.date, buyPrice),
+      athEvents: buildAthEvents(bars, breakout.date, buyPrice),
     };
   }
 

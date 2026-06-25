@@ -1,13 +1,22 @@
 import { useMemo } from 'react';
 import { Box, Grid, Paper, Typography } from '@mui/material';
-import type { DashboardSummary, TradeResult } from '../types';
+import type { BacktestConfig, BenchmarkSeries, DashboardSummary, SymbolDuplicateNote, TradeResult } from '../types';
 import { formatCurrency, formatPercent } from '../utils/formatters';
-import { buildFlowDiagramTree, dedupeResultsBySymbolMinDate } from '../utils/flowDiagramBuilder';
-import FlowDiagram from './FlowDiagram';
+import { getDashboardResults, SYMBOL_REAPPEAR_MONTHS } from '../utils/symbolDateSelection';
+import { buildInvestorDashboard } from '../utils/investorDashboardBuilder';
+import DuplicateSymbolsPanel from './DuplicateSymbolsPanel';
+import InvestorDashboard from './InvestorDashboard';
+import NearBuyBandPanel from './NearBuyBandPanel';
+import OpenStocksPanel from './OpenStocksPanel';
 
 interface SummaryCardsProps {
   summary: DashboardSummary | null;
   results: TradeResult[];
+  config: BacktestConfig;
+  benchmark: BenchmarkSeries | null;
+  duplicateSymbolNotes: SymbolDuplicateNote[];
+  nearBuyPlusPct: number;
+  nearBuyMinusPct: number;
 }
 
 function MetricTable({
@@ -44,12 +53,20 @@ function MetricTable({
   );
 }
 
-export default function SummaryCards({ summary, results }: SummaryCardsProps) {
-  const { tree, dedupeInfo } = useMemo(() => {
-    const info = dedupeResultsBySymbolMinDate(results);
+export default function SummaryCards({
+  summary,
+  results,
+  config,
+  benchmark,
+  duplicateSymbolNotes,
+  nearBuyPlusPct,
+  nearBuyMinusPct,
+}: SummaryCardsProps) {
+  const { dashboard, dashboardRows } = useMemo(() => {
+    const { rows } = getDashboardResults(results);
     return {
-      tree: buildFlowDiagramTree(results),
-      dedupeInfo: info,
+      dashboard: buildInvestorDashboard(results),
+      dashboardRows: rows,
     };
   }, [results]);
 
@@ -58,18 +75,28 @@ export default function SummaryCards({ summary, results }: SummaryCardsProps) {
   return (
     <Box sx={{ mb: 3 }}>
       <Typography variant="h6" gutterBottom>
-        Dashboard
+        Dashboard — Risk / Reward
       </Typography>
 
-      {tree ? (
+      {dashboard ? (
         <>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            One row per symbol using earliest min date (same as backtest).{' '}
-            {dedupeInfo.duplicatesDropped > 0
-              ? `${dedupeInfo.duplicatesDropped} duplicate symbol row(s) dropped (${dedupeInfo.rawCount} → ${dedupeInfo.deduped.length}).`
-              : `${dedupeInfo.deduped.length} unique symbol(s).`}
+            {dashboardRows.length} backtest run(s). Duplicate symbols use a rolling{' '}
+            {SYMBOL_REAPPEAR_MONTHS}-month rule from each kept date (not always the earliest).
           </Typography>
-          <FlowDiagram tree={tree} />
+          <InvestorDashboard
+            data={dashboard}
+            results={results}
+            benchmark={benchmark}
+            config={config}
+          />
+          <DuplicateSymbolsPanel notes={duplicateSymbolNotes} />
+          <OpenStocksPanel results={dashboardRows} />
+          <NearBuyBandPanel
+            results={dashboardRows}
+            plusPct={nearBuyPlusPct}
+            minusPct={nearBuyMinusPct}
+          />
         </>
       ) : (
         <Paper sx={{ p: 2, mb: 2 }}>

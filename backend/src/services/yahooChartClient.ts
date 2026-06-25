@@ -25,13 +25,14 @@ const USER_AGENT =
 export async function fetchYahooChart(
   yahooSymbol: string,
   period1: string,
-  period2: string
+  period2: string,
+  interval: '1d' | '1mo' = '1d'
 ): Promise<OhlcvBar[]> {
   const startSec = Math.floor(dayjs(period1).startOf('day').valueOf() / 1000);
   const endSec = Math.floor(dayjs(period2).endOf('day').valueOf() / 1000);
   const url =
     `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}` +
-    `?period1=${startSec}&period2=${endSec}&interval=1d&includePrePost=false`;
+    `?period1=${startSec}&period2=${endSec}&interval=${interval}&includePrePost=false`;
 
   const response = await fetch(url, {
     headers: {

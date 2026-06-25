@@ -5,6 +5,12 @@ import type {
   MlAnalyzeResponse,
   ModelInfo,
   ResultsResponse,
+  ScannerOptionsResponse,
+  ScannerResultsResponse,
+  ScannerRunRequest,
+  ScannerStartResponse,
+  ScannerStatusResponse,
+  ScannerSymbolSearchResponse,
   StatusResponse,
   UploadResponse,
 } from '../types';
@@ -75,6 +81,37 @@ export async function getModelInfo(): Promise<{ model: ModelInfo | null }> {
 export async function analyzeWithMl(jobId: string): Promise<MlAnalyzeResponse> {
   const { data } = await api.post<MlAnalyzeResponse>('/ml/analyze', { jobId });
   return data;
+}
+
+export async function searchScannerSymbols(q: string): Promise<ScannerSymbolSearchResponse> {
+  const { data } = await api.get<ScannerSymbolSearchResponse>('/scanner/symbols/search', {
+    params: { q },
+  });
+  return data;
+}
+
+export async function getScannerOptions(): Promise<ScannerOptionsResponse> {
+  const { data } = await api.get<ScannerOptionsResponse>('/scanner/options');
+  return data;
+}
+
+export async function startScanner(request: ScannerRunRequest): Promise<ScannerStartResponse> {
+  const { data } = await api.post<ScannerStartResponse>('/scanner/run', request);
+  return data;
+}
+
+export async function getScannerStatus(jobId: string): Promise<ScannerStatusResponse> {
+  const { data } = await api.get<ScannerStatusResponse>('/scanner/status', { params: { jobId } });
+  return data;
+}
+
+export async function getScannerResults(jobId: string): Promise<ScannerResultsResponse> {
+  const { data } = await api.get<ScannerResultsResponse>('/scanner/results', { params: { jobId } });
+  return data;
+}
+
+export function getScannerExportCsvUrl(jobId: string): string {
+  return `/api/scanner/export/csv?jobId=${encodeURIComponent(jobId)}`;
 }
 
 export default api;

@@ -4,6 +4,7 @@ import { cacheService } from '../cache/cacheService.js';
 import type { OhlcvBar } from '../types/index.js';
 import { startOfMonthIso, todayIso } from '../utils/dateParser.js';
 import { isRateLimitError, withRetry } from '../utils/retry.js';
+import { toYahooSymbols } from '../utils/symbolUtils.js';
 import { fetchYahooChart } from './yahooChartClient.js';
 
 type FetchResult = { bars: OhlcvBar[]; error?: string };
@@ -118,6 +119,92 @@ export class YahooFinanceService {
     } finally {
       this.inflight.delete(cacheKey);
     }
+  }
+
+  /** Try NSE (.NS) then BSE (.BO) for bare symbols. */
+  async fetchForSymbol(symbol: string, minDate: string): Promise<FetchResult> {
+    const candidates = toYahooSymbols(symbol);
+    let lastError: string | undefined;
+
+    for (const yahooSymbol of candidates) {
+      const result = await this.fetchHistoricalData(yahooSymbol, minDate);
+      if (!result.error && result.bars.length > 0) {
+        return result;
+      }
+      if (result.error) {
+        lastError = result.error;
+        if (result.error.includes('rate limit')) {
+          return result;
+        }
+      }
+    }
+
+    return {
+      bars: [],
+      error: lastError ?? 'Symbol not found on NSE or BSE',
+    };
+  }
+
+  /** Monthly OHLC for scanner (interval=1mo). */
+  async fetchMonthlyForSymbol(symbol: string, startDate: string): Promise<FetchResult> {
+    const candidates = toYahooSymbols(symbol);
+    const period1 = startOfMonthIso(startDate);
+    const period2 = todayIso();
+    let lastError: string | undefined;
+
+    for (const yahooSymbol of candidates) {
+      const cacheKey = `${yahooSymbol}:mo:${period1}:${period2}`;
+      const cached = cacheService.get(yahooSymbol, `mo:${period1}`, period2);
+      if (cached) {
+        return { bars: cached };
+      }
+
+      const inflight = this.inflight.get(cacheKey);
+      if (inflight) {
+        const result = await inflight;
+        if (!result.error && result.bars.length > 0) return result;
+      }
+
+      const promise = this.scheduleThrottled(() =>
+        withRetry(
+          () => fetchYahooChart(yahooSymbol, period1, period2, '1mo'),
+          config.yahooRetryAttempts,
+          config.yahooRetryBaseDelayMs,
+          config.yahooRateLimitWaitMs
+        )
+      )
+        .then((bars) => {
+          if (bars.length === 0) {
+            return { bars: [], error: 'Symbol Not Found' } as FetchResult;
+          }
+          cacheService.set(yahooSymbol, `mo:${period1}`, period2, bars);
+          return { bars } as FetchResult;
+        })
+        .catch((error) => {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          if (isRateLimitError(error)) {
+            this.rateLimitUntil = Date.now() + config.yahooRateLimitWaitMs;
+            return { bars: [], error: 'Yahoo rate limit exceeded - wait and retry' };
+          }
+          return { bars: [], error: errMsg };
+        });
+
+      this.inflight.set(cacheKey, promise);
+      try {
+        const result = await promise;
+        if (!result.error && result.bars.length > 0) {
+          return result;
+        }
+        if (result.error) {
+          lastError = result.error;
+          if (result.error.includes('rate limit')) return result;
+        }
+      } finally {
+        this.inflight.delete(cacheKey);
+      }
+    }
+
+    return { bars: [], error: lastError ?? 'Symbol not found on NSE or BSE' };
   }
 }
 

@@ -9,6 +9,8 @@ const config: BacktestConfig = {
   stoplossPercent: 30,
   sameDayHitMode: 'STOPLOSS_FIRST',
   investmentAmount: 100000,
+  nearBuyPlusPct: 10,
+  nearBuyMinusPct: 10,
 };
 
 function makeTrade(overrides: Partial<TradeResult> & Pick<TradeResult, 'result'>): TradeResult {
@@ -26,6 +28,9 @@ function makeTrade(overrides: Partial<TradeResult> & Pick<TradeResult, 'result'>
     monthHighDate: '2024-01-20',
     breakoutCandleHigh: 102,
     exitPrice: 130,
+    latestClosePrice: null,
+    pctFromBuyPrice: null,
+    distToNearBand: null,
     investmentAmount: 100000,
     exitValue: null,
     pnl: null,
@@ -47,6 +52,17 @@ function makeTrade(overrides: Partial<TradeResult> & Pick<TradeResult, 'result'>
     recoveryDate: null,
     secondStoplossHit: null,
     secondStoplossHitDate: null,
+    newAthAfterFtt: null,
+    lowHitBuyAfterFtt: null,
+    lowHitSlAfterFtt: null,
+    targetAfterRecovery: null,
+    newAthAfterRecoveryTarget: null,
+    newAthAfterFttDate: null,
+    lowHitBuyAfterFttDate: null,
+    targetAfterRecoveryDate: null,
+    newAthAfterRecoveryTargetDate: null,
+    pricePath: null,
+    athEvents: null,
     ...overrides,
   };
 }

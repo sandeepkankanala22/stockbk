@@ -3,6 +3,12 @@ import { cacheService } from '../cache/cacheService.js';
 import { backtestEngine } from '../backtest/BacktestEngine.js';
 import { financeService } from './financeService.js';
 import { statisticsService } from './statisticsService.js';
+import { earliestBuyDate, fetchNifty50Benchmark } from './benchmarkService.js';
+import { excelParserService } from './excelParserService.js';
+import {
+  attachResultsToDuplicateNotes,
+  buildSymbolDuplicateNotes,
+} from '../utils/symbolDateSelection.js';
 import type {
   BacktestConfig,
   JobState,
@@ -71,6 +77,8 @@ class JobManagerService {
       upload: upload.parsed,
       results: [],
       summary: null,
+      benchmark: null,
+      duplicateSymbolNotes: buildSymbolDuplicateNotes(upload.parsed.validRows),
     };
 
     this.jobs.set(jobId, job);
@@ -121,6 +129,12 @@ class JobManagerService {
       job.results = results;
       const baseSummary = statisticsService.computeSummary(results);
       job.summary = financeService.applyFinanceToSummary(baseSummary, results, backtestConfig);
+      const start = earliestBuyDate(results);
+      job.benchmark = start ? await fetchNifty50Benchmark(start) : null;
+      job.duplicateSymbolNotes = attachResultsToDuplicateNotes(
+        job.duplicateSymbolNotes,
+        results
+      );
       job.status = 'completed';
       job.progress.percentComplete = 100;
       job.progress.etaSeconds = 0;

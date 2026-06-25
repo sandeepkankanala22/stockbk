@@ -4,6 +4,14 @@ import { startBacktest, getResults } from '../controllers/backtestController.js'
 import { exportCsv, exportExcel } from '../controllers/exportController.js';
 import { getModelInfo, predictJob, trainAndPredict, trainModel } from '../controllers/mlController.js';
 import { getStatus } from '../controllers/statusController.js';
+import {
+  exportScannerCsv,
+  getScannerOptionsHandler,
+  getScannerResults,
+  getScannerStatus,
+  searchScannerSymbolsHandler,
+  startScanner,
+} from '../controllers/scannerController.js';
 import { resetState, uploadFile } from '../controllers/uploadController.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validateBacktest } from '../middleware/validateBacktest.js';
@@ -33,5 +41,12 @@ router.get('/ml/model', getModelInfo);
 router.post('/ml/train', trainModel);
 router.post('/ml/predict', predictJob);
 router.post('/ml/analyze', trainAndPredict);
+
+router.get('/scanner/options', getScannerOptionsHandler);
+router.get('/scanner/symbols/search', searchScannerSymbolsHandler);
+router.post('/scanner/run', startScanner);
+router.get('/scanner/status', getScannerStatus);
+router.get('/scanner/results', getScannerResults);
+router.get('/scanner/export/csv', exportScannerCsv);
 
 export default router;

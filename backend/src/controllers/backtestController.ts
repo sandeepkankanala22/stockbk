@@ -4,13 +4,15 @@ import { AppError } from '../middleware/errorHandler.js';
 
 export async function startBacktest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { uploadId, targetPercent, stoplossPercent, sameDayHitMode, investmentAmount } = req.body;
+    const { uploadId, targetPercent, stoplossPercent, sameDayHitMode, investmentAmount, nearBuyPlusPct, nearBuyMinusPct } = req.body;
 
     const job = await jobManagerService.startBacktest(uploadId, {
       targetPercent,
       stoplossPercent,
       sameDayHitMode,
       investmentAmount,
+      nearBuyPlusPct,
+      nearBuyMinusPct,
     });
 
     res.status(202).json({
@@ -57,6 +59,9 @@ export function getResults(req: Request, res: Response, next: NextFunction): voi
     status: job.status,
     results: job.results,
     summary: job.summary,
+    config: job.config,
+    benchmark: job.benchmark,
+    duplicateSymbolNotes: job.duplicateSymbolNotes,
     invalidRows: job.upload.invalidRows,
     errorMessage: job.errorMessage,
   });

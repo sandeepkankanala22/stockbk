@@ -1,15 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   Container,
-  AppBar,
-  Toolbar,
-  Typography,
   Grid,
   Button,
   Stack,
   Snackbar,
   Alert,
   Box,
+  Typography,
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
@@ -33,6 +31,8 @@ const defaultConfig: BacktestConfig = {
   stoplossPercent: 30,
   sameDayHitMode: 'STOPLOSS_FIRST',
   investmentAmount: 100000,
+  nearBuyPlusPct: 10,
+  nearBuyMinusPct: 10,
 };
 
 export default function BacktestPage() {
@@ -89,6 +89,16 @@ export default function BacktestPage() {
 
     if (!config.investmentAmount || config.investmentAmount <= 0) {
       setSnackbar({ message: 'Investment amount must be greater than 0', severity: 'error' });
+      return;
+    }
+
+    if (config.nearBuyPlusPct < 0 || config.nearBuyPlusPct > 100) {
+      setSnackbar({ message: 'Near buy plus band must be between 0 and 100', severity: 'error' });
+      return;
+    }
+
+    if (config.nearBuyMinusPct < 0 || config.nearBuyMinusPct > 100) {
+      setSnackbar({ message: 'Near buy minus band must be between 0 and 100', severity: 'error' });
       return;
     }
 
@@ -184,14 +194,6 @@ export default function BacktestPage() {
 
   return (
     <>
-      <AppBar position="static" elevation={1}>
-        <Toolbar>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>
-            NSE Breakout Backtester
-          </Typography>
-        </Toolbar>
-      </AppBar>
-
       <Container maxWidth="xl" sx={{ py: 3 }}>
         <Grid container spacing={3} sx={{ mb: 3 }}>
           <Grid item xs={12} md={6}>
@@ -232,7 +234,15 @@ export default function BacktestPage() {
         />
 
         {resultsData?.summary && resultsData.results && (
-          <SummaryCards summary={resultsData.summary} results={resultsData.results} />
+          <SummaryCards
+            summary={resultsData.summary}
+            results={resultsData.results}
+            config={resultsData.config ?? config}
+            benchmark={resultsData.benchmark ?? null}
+            duplicateSymbolNotes={resultsData.duplicateSymbolNotes ?? []}
+            nearBuyPlusPct={resultsData.config?.nearBuyPlusPct ?? config.nearBuyPlusPct}
+            nearBuyMinusPct={resultsData.config?.nearBuyMinusPct ?? config.nearBuyMinusPct}
+          />
         )}
 
         {jobId && resultsData && (
@@ -254,7 +264,12 @@ export default function BacktestPage() {
         )}
 
         {resultsData?.results && resultsData.results.length > 0 && (
-          <ResultsGrid results={resultsData.results} showPredictions={showPredictions} />
+          <ResultsGrid
+            results={resultsData.results}
+            showPredictions={showPredictions}
+            nearBuyPlusPct={resultsData.config?.nearBuyPlusPct ?? config.nearBuyPlusPct}
+            nearBuyMinusPct={resultsData.config?.nearBuyMinusPct ?? config.nearBuyMinusPct}
+          />
         )}
 
         {!resultsData && !isRunning && uploadInfo && (

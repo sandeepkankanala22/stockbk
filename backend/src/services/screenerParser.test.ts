@@ -96,6 +96,9 @@ describe('tradePriceUtils', () => {
       monthHighDate: '2026-01-10',
       breakoutCandleHigh: null,
       exitPrice: null,
+      latestClosePrice: null,
+      pctFromBuyPrice: null,
+      distToNearBand: null,
       investmentAmount: null,
       exitValue: null,
       pnl: null,
@@ -117,6 +120,17 @@ describe('tradePriceUtils', () => {
       recoveryDate: null,
       secondStoplossHit: null,
       secondStoplossHitDate: null,
+      newAthAfterFtt: null,
+      lowHitBuyAfterFtt: null,
+      lowHitSlAfterFtt: null,
+      targetAfterRecovery: null,
+      newAthAfterRecoveryTarget: null,
+      newAthAfterFttDate: null,
+      lowHitBuyAfterFttDate: null,
+      targetAfterRecoveryDate: null,
+      newAthAfterRecoveryTargetDate: null,
+      pricePath: null,
+      athEvents: null,
     };
 
     assert.equal(

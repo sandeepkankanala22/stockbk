@@ -9,6 +9,8 @@ import 'ag-grid-community/styles/ag-theme-alpine.css';
 interface ResultsGridProps {
   results: TradeResult[];
   showPredictions?: boolean;
+  nearBuyPlusPct?: number;
+  nearBuyMinusPct?: number;
 }
 
 const resultColors: Record<TradeResultType, string> = {
@@ -27,7 +29,12 @@ const resultSortOrder: Record<TradeResultType, number> = {
   ERROR: 4,
 };
 
-export default function ResultsGrid({ results, showPredictions }: ResultsGridProps) {
+export default function ResultsGrid({
+  results,
+  showPredictions,
+  nearBuyPlusPct = 10,
+  nearBuyMinusPct = 10,
+}: ResultsGridProps) {
   const columnDefs = useMemo<ColDef<TradeResult>[]>(() => {
     const base: ColDef<TradeResult>[] = [
       { field: 'symbol', headerName: 'Symbol', filter: true, pinned: 'left' },
@@ -92,6 +99,21 @@ export default function ResultsGrid({ results, showPredictions }: ResultsGridPro
         filter: true,
       },
       { field: 'secondStoplossHitDate', headerName: '2nd SL Hit Date', filter: true },
+      { field: 'latestClosePrice', headerName: 'Latest Close', filter: 'agNumberColumnFilter' },
+      {
+        field: 'pctFromBuyPrice',
+        headerName: '% From Buy',
+        filter: 'agNumberColumnFilter',
+        valueFormatter: (p) =>
+          p.value == null ? '' : `${Number(p.value).toFixed(2)}%`,
+      },
+      {
+        field: 'distToNearBand',
+        headerName: `Dist to +${nearBuyPlusPct}% / -${nearBuyMinusPct}%`,
+        filter: 'agNumberColumnFilter',
+        valueFormatter: (p) =>
+          p.value == null ? '' : `${Number(p.value).toFixed(2)}%`,
+      },
       { field: 'exitPrice', headerName: 'Exit Price', filter: 'agNumberColumnFilter' },
       { field: 'investmentAmount', headerName: 'Investment (INR)', filter: 'agNumberColumnFilter' },
       { field: 'exitValue', headerName: 'Exit Value (INR)', filter: 'agNumberColumnFilter' },
@@ -147,7 +169,7 @@ export default function ResultsGrid({ results, showPredictions }: ResultsGridPro
     );
 
     return base;
-  }, [showPredictions]);
+  }, [showPredictions, nearBuyPlusPct, nearBuyMinusPct]);
 
   const defaultColDef = useMemo<ColDef>(
     () => ({

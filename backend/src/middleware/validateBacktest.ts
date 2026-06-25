@@ -11,8 +11,15 @@ function isValidInvestment(value: unknown): value is number {
 }
 
 export function validateBacktest(req: Request, _res: Response, next: NextFunction): void {
-  const { targetPercent, stoplossPercent, sameDayHitMode, uploadId, investmentAmount } =
-    req.body ?? {};
+  const {
+    targetPercent,
+    stoplossPercent,
+    sameDayHitMode,
+    uploadId,
+    investmentAmount,
+    nearBuyPlusPct,
+    nearBuyMinusPct,
+  } = req.body ?? {};
   const fields: Record<string, string> = {};
 
   if (!uploadId || typeof uploadId !== 'string') {
@@ -29,6 +36,23 @@ export function validateBacktest(req: Request, _res: Response, next: NextFunctio
 
   if (!isValidInvestment(investmentAmount)) {
     fields.investmentAmount = 'Must be a positive number (investment amount in INR)';
+  }
+
+  const plusPct =
+    nearBuyPlusPct != null && isValidPercent(Number(nearBuyPlusPct))
+      ? Number(nearBuyPlusPct)
+      : 10;
+  const minusPct =
+    nearBuyMinusPct != null && isValidPercent(Number(nearBuyMinusPct))
+      ? Number(nearBuyMinusPct)
+      : 10;
+
+  if (nearBuyPlusPct != null && !isValidPercent(Number(nearBuyPlusPct))) {
+    fields.nearBuyPlusPct = 'Must be a number between 0 and 100';
+  }
+
+  if (nearBuyMinusPct != null && !isValidPercent(Number(nearBuyMinusPct))) {
+    fields.nearBuyMinusPct = 'Must be a number between 0 and 100';
   }
 
   const validModes: SameDayHitMode[] = ['STOPLOSS_FIRST', 'TARGET_FIRST'];
@@ -48,6 +72,8 @@ export function validateBacktest(req: Request, _res: Response, next: NextFunctio
     stoplossPercent,
     sameDayHitMode: mode,
     investmentAmount,
+    nearBuyPlusPct: plusPct,
+    nearBuyMinusPct: minusPct,
   } satisfies BacktestConfig & { uploadId: string };
 
   next();

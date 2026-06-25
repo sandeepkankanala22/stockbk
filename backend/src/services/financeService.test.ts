@@ -18,6 +18,9 @@ const baseTrade: TradeResult = {
   monthHighDate: '2020-01-15',
   breakoutCandleHigh: 105,
   exitPrice: 130,
+  latestClosePrice: null,
+  pctFromBuyPrice: null,
+  distToNearBand: null,
   investmentAmount: null,
   exitValue: null,
   pnl: null,
@@ -39,6 +42,17 @@ const baseTrade: TradeResult = {
   recoveryDate: null,
   secondStoplossHit: null,
   secondStoplossHitDate: null,
+  newAthAfterFtt: null,
+  lowHitBuyAfterFtt: null,
+  lowHitSlAfterFtt: null,
+  targetAfterRecovery: null,
+  newAthAfterRecoveryTarget: null,
+  newAthAfterFttDate: null,
+  lowHitBuyAfterFttDate: null,
+  targetAfterRecoveryDate: null,
+  newAthAfterRecoveryTargetDate: null,
+  pricePath: null,
+  athEvents: null,
 };
 
 describe('financeService', () => {

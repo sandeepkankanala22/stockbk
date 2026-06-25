@@ -44,11 +44,49 @@ export interface OhlcvBar {
   volume: number;
 }
 
+export interface PricePathPoint {
+  date: string;
+  pct: number;
+}
+
+export interface AthEventPoint {
+  date: string;
+  pct: number;
+}
+
+export interface BenchmarkSeries {
+  label: string;
+  startDate: string;
+  points: PricePathPoint[];
+}
+
+export interface SymbolDateEntry {
+  date: string;
+  kept: boolean;
+  monthsFromMin: number;
+  monthsFromLastKept: number;
+  reason: string;
+}
+
+export interface SymbolDuplicateNote {
+  symbol: string;
+  minDate: string;
+  entries: SymbolDateEntry[];
+  results?: Array<{
+    minDate: string;
+    result: string;
+    buyDate: string | null;
+    pctFromBuyPrice: number | null;
+  }>;
+}
+
 export interface BacktestConfig {
   targetPercent: number;
   stoplossPercent: number;
   sameDayHitMode: SameDayHitMode;
   investmentAmount: number;
+  nearBuyPlusPct: number;
+  nearBuyMinusPct: number;
 }
 
 export interface TradeResult {
@@ -66,6 +104,9 @@ export interface TradeResult {
   monthHighDate: string | null;
   breakoutCandleHigh: number | null;
   exitPrice: number | null;
+  latestClosePrice: number | null;
+  pctFromBuyPrice: number | null;
+  distToNearBand: number | null;
   investmentAmount: number | null;
   exitValue: number | null;
   pnl: number | null;
@@ -87,6 +128,17 @@ export interface TradeResult {
   recoveryDate: string | null;
   secondStoplossHit: boolean | null;
   secondStoplossHitDate: string | null;
+  newAthAfterFtt: boolean | null;
+  lowHitBuyAfterFtt: boolean | null;
+  lowHitSlAfterFtt: boolean | null;
+  targetAfterRecovery: boolean | null;
+  newAthAfterRecoveryTarget: boolean | null;
+  newAthAfterFttDate: string | null;
+  lowHitBuyAfterFttDate: string | null;
+  targetAfterRecoveryDate: string | null;
+  newAthAfterRecoveryTargetDate: string | null;
+  pricePath: PricePathPoint[] | null;
+  athEvents: AthEventPoint[] | null;
   prediction?: TradePrediction | null;
 }
 
@@ -253,6 +305,8 @@ export interface JobState {
   upload: ParsedUpload;
   results: TradeResult[];
   summary: DashboardSummary | null;
+  benchmark: BenchmarkSeries | null;
+  duplicateSymbolNotes: SymbolDuplicateNote[];
   errorMessage?: string;
 }
 
@@ -260,4 +314,51 @@ export interface ApiError {
   code: string;
   message: string;
   fields?: Record<string, string>;
+}
+
+export interface ScannerSignal {
+  symbol: string;
+  company: string;
+  signalDate: string;
+  entryPrice: number;
+  currentPrice: number;
+  returnPct: number;
+  return3mPct: number | null;
+  return6mPct: number | null;
+  return12mPct: number | null;
+  maxGainPct: number | null;
+  maxDrawdownPct: number | null;
+}
+
+export type ScannerPeriod = '6m' | '1y' | '3y' | '5y' | 'all';
+
+export type ScannerUniverse = 'nifty100' | 'nifty500' | 'all' | 'custom';
+
+export type ScannerSector =
+  | 'all'
+  | 'banking'
+  | 'it'
+  | 'pharma'
+  | 'auto'
+  | 'fmcg'
+  | 'energy'
+  | 'metal'
+  | 'infra'
+  | 'realty'
+  | 'telecom'
+  | 'chemicals';
+
+export interface ScannerJobState {
+  jobId: string;
+  period: ScannerPeriod;
+  universe: ScannerUniverse;
+  sector: ScannerSector;
+  customSymbols?: string[];
+  status: JobStatus;
+  progress: JobProgress;
+  signals: ScannerSignal[];
+  signalsFoundCount?: number;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
 }

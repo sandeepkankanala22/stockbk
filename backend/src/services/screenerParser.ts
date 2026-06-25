@@ -81,6 +81,26 @@ function findNetProfitRowHtml(tableSection: string): string | null {
   return null;
 }
 
+function findQuarterlyRowHtml(tableSection: string, scheduleName: string): string | null {
+  const tbodyStart = tableSection.indexOf('<tbody>');
+  if (tbodyStart === -1) return null;
+
+  const tbody = tableSection.slice(tbodyStart);
+  const rowRe = /<tr[\s\S]*?<\/tr>/g;
+  let rowMatch: RegExpExecArray | null;
+
+  while ((rowMatch = rowRe.exec(tbody)) !== null) {
+    const rowHtml = rowMatch[0];
+    if (
+      rowHtml.includes(`showSchedule('${scheduleName}', 'quarters'`) ||
+      rowHtml.includes(`showSchedule("${scheduleName}", "quarters"`)
+    ) {
+      return rowHtml;
+    }
+  }
+  return null;
+}
+
 function parseRowValues(rowHtml: string): (number | null)[] {
   const tds = [...rowHtml.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)];
   return tds.slice(1).map((td) => parseIndianNumber(stripHtml(td[1])));
@@ -109,6 +129,78 @@ export function parseQuarterlyNetProfitFromHtml(html: string): QuarterNetProfit[
   }
 
   return quarters;
+}
+
+export function parseQuarterlyEpsFromHtml(html: string): QuarterNetProfit[] {
+  const tableSection = extractQuartersTableSection(html);
+  if (!tableSection) return [];
+
+  const headers = parseQuarterHeaders(tableSection);
+  const rowHtml = findQuarterlyRowHtml(tableSection, 'EPS in Rs');
+  if (!rowHtml || headers.length === 0) return [];
+
+  const rawValues = parseRowValues(rowHtml);
+  const count = Math.min(headers.length, rawValues.length);
+  const quarters: QuarterNetProfit[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const value = rawValues[i];
+    if (value == null) continue;
+    quarters.push({
+      label: headers[i].label,
+      dateKey: headers[i].dateKey,
+      valueCr: value,
+    });
+  }
+
+  return quarters;
+}
+
+/** Market capitalization in ₹ Crore from screener company header. */
+export function parseMarketCapCrFromHtml(html: string): number | null {
+  const patterns = [
+    /Market Cap[^<]*<\/span>\s*<span[^>]*>\s*₹?\s*([\d,.]+)\s*Cr/i,
+    /Market Cap[\s\S]{0,120}?([\d,]+(?:\.\d+)?)\s*Cr/i,
+  ];
+  for (const re of patterns) {
+    const m = html.match(re);
+    if (m) {
+      const n = parseIndianNumber(m[1]);
+      if (n != null) return n;
+    }
+  }
+  return null;
+}
+
+export function parseCurrentPriceFromHtml(html: string): number | null {
+  const m = html.match(/class="[^"]*font-size-18[^"]*"[^>]*>\s*([\d,.]+)/i);
+  if (m) return parseIndianNumber(m[1]);
+  return null;
+}
+
+/** Chartink: MCAP > 5000 OR (MCAP > 2500 AND last 4 quarterly EPS > 0). */
+export function passesScannerFundamentalFilter(
+  marketCapCr: number,
+  epsQuarters: QuarterNetProfit[],
+  asOfDate: string
+): boolean {
+  if (marketCapCr > 5000) return true;
+  if (marketCapCr <= 2500) return false;
+
+  const announced = filterAnnouncedQuarters(epsQuarters, asOfDate);
+  if (announced.length < 4) return false;
+  const last4 = announced.slice(-4);
+  return last4.every((q) => q.valueCr > 0);
+}
+
+/** Estimate historical market cap from current cap and price ratio. */
+export function estimateMarketCapAtPrice(
+  currentMarketCapCr: number,
+  currentPrice: number,
+  priceAtDate: number
+): number {
+  if (currentPrice <= 0) return currentMarketCapCr;
+  return (currentMarketCapCr * priceAtDate) / currentPrice;
 }
 
 /** Quarters whose results are likely published (not future / not pending). */

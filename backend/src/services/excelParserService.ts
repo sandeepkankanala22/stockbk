@@ -3,6 +3,7 @@ import type { InputRow, InvalidRow, ParsedUpload } from '../types/index.js';
 import { parseCsvContent } from '../utils/csvParser.js';
 import { parseDateValue } from '../utils/dateParser.js';
 import { normalizeSymbol } from '../utils/symbolUtils.js';
+import { selectSymbolMinDates } from '../utils/symbolDateSelection.js';
 
 function findColumnIndex(headers: string[], names: string[]): number {
   const normalized = headers.map((h) => h.trim().toLowerCase());
@@ -15,7 +16,20 @@ function findColumnIndex(headers: string[], names: string[]): number {
 
 function getCellValue(row: ExcelJS.Row, colIndex: number): unknown {
   const cell = row.getCell(colIndex + 1);
-  return cell.value;
+  const value = cell.value;
+  if (value == null) return value;
+  if (typeof value === 'object') {
+    if ('richText' in value && Array.isArray((value as { richText: { text: string }[] }).richText)) {
+      return (value as { richText: { text: string }[] }).richText.map((r) => r.text).join('');
+    }
+    if ('text' in value && typeof (value as { text: string }).text === 'string') {
+      return (value as { text: string }).text;
+    }
+    if ('result' in value) {
+      return (value as { result: unknown }).result;
+    }
+  }
+  return value;
 }
 
 function processRows(
@@ -154,14 +168,33 @@ export class ExcelParserService {
   }
 
   extractUniqueSymbols(rows: InputRow[]): Map<string, string> {
-    const symbolMinDates = new Map<string, string>();
-    for (const row of rows) {
-      const existing = symbolMinDates.get(row.symbol);
-      if (!existing || row.date < existing) {
-        symbolMinDates.set(row.symbol, row.date);
+    const jobs = this.extractSymbolJobs(rows);
+    const map = new Map<string, string>();
+    for (const job of jobs) {
+      const existing = map.get(job.symbol);
+      if (!existing || job.minDate < existing) {
+        map.set(job.symbol, job.minDate);
       }
     }
-    return symbolMinDates;
+    return map;
+  }
+
+  /** One job per symbol+minDate; rolling 50-month gap from each kept date. */
+  extractSymbolJobs(rows: InputRow[]): Array<{ symbol: string; minDate: string }> {
+    const bySymbol = new Map<string, string[]>();
+    for (const row of rows) {
+      const list = bySymbol.get(row.symbol) ?? [];
+      list.push(row.date);
+      bySymbol.set(row.symbol, list);
+    }
+
+    const jobs: Array<{ symbol: string; minDate: string }> = [];
+    for (const [symbol, dates] of bySymbol) {
+      for (const minDate of selectSymbolMinDates(dates)) {
+        jobs.push({ symbol, minDate });
+      }
+    }
+    return jobs.sort((a, b) => a.minDate.localeCompare(b.minDate) || a.symbol.localeCompare(b.symbol));
   }
 }
 
