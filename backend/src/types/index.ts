@@ -362,3 +362,108 @@ export interface ScannerJobState {
   startedAt: string;
   completedAt?: string;
 }
+
+export type PortfolioSimulationMode = 'compound' | 'withdraw_principal';
+
+export interface PortfolioSimConfig {
+  initialCapital: number;
+  maxHoldings: number;
+  targetPercent: number;
+  stoplossPercent: number;
+  /** When false, all buy signals are taken (no max-holdings cap). Position size still uses maxHoldings in the divisor. */
+  enforceMaxHoldings?: boolean;
+}
+
+export type PortfolioExitReason = 'TARGET' | 'STOPLOSS';
+
+export interface PortfolioClosedTrade {
+  symbol: string;
+  buyDate: string;
+  sellDate: string;
+  buyPrice: number;
+  sellPrice: number;
+  investmentAmount: number;
+  quantity: number;
+  profitLoss: number;
+  returnPct: number;
+  exitReason: PortfolioExitReason;
+}
+
+export interface PortfolioOpenPosition {
+  symbol: string;
+  buyDate: string;
+  buyPrice: number;
+  quantity: number;
+  investmentAmount: number;
+  currentPrice: number;
+  marketValue: number;
+  unrealizedProfit: number;
+  principalReturned: number;
+}
+
+export interface PortfolioSimMetrics {
+  mode: PortfolioSimulationMode;
+  initialCapital: number;
+  availableCash: number;
+  portfolioValue: number;
+  investmentPerStock: number;
+  openPositions: number;
+  closedPositions: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalRealizedProfit: number;
+  totalUnrealizedProfit: number;
+  totalReturnPct: number;
+  cagrPercent: number | null;
+  maxDrawdownPct: number;
+}
+
+export type IgnoredBuyReason = 'max_holdings' | 'insufficient_cash';
+
+export interface IgnoredBuySignal {
+  symbol: string;
+  entryDate: string;
+  entryPrice: number;
+  reason: IgnoredBuyReason;
+  openPositionsAtSkip: number;
+  availableCashAtSkip: number;
+  requiredInvestment: number;
+}
+
+export interface PortfolioSimResult {
+  metrics: PortfolioSimMetrics;
+  closedTrades: PortfolioClosedTrade[];
+  openPositions: PortfolioOpenPosition[];
+  ignoredBuySignals: number;
+  ignoredBuys: IgnoredBuySignal[];
+  buysExecuted: number;
+}
+
+export interface PortfolioComparisonResponse {
+  signalCount: number;
+  simulationStart: string | null;
+  simulationEnd: string | null;
+  compound: PortfolioSimResult;
+  withdrawPrincipal: PortfolioSimResult;
+}
+
+export interface BacktestPortfolioComparison {
+  signalCount: number;
+  pullbackEntryCount: number;
+  combinedEntryCount: number;
+  simulationStart: string | null;
+  simulationEnd: string | null;
+  config: PortfolioSimConfig;
+  /** Case 1: buy at breakout (after signal) — full exit & compound */
+  case1: PortfolioSimResult;
+  /** Case 2: buy at breakout (after signal) — withdraw principal at target */
+  case2: PortfolioSimResult;
+  /** Case 3: breakout + FTT pullback buys — full exit & compound */
+  case3Compound: PortfolioSimResult;
+  /** Case 3: breakout + first FTT pullback — withdraw principal at target */
+  case3Withdraw: PortfolioSimResult;
+  /** Case 4: same entries as Case 3, no holding cap — buy every signal (full exit & compound) */
+  case4: PortfolioSimResult;
+}

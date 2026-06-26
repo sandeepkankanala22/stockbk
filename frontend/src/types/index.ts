@@ -393,3 +393,112 @@ export interface ScannerRunRequest {
 export interface ScannerSymbolSearchResponse {
   results: ScannerSymbolOption[];
 }
+
+export type PortfolioSimulationMode = 'compound' | 'withdraw_principal';
+
+export interface PortfolioSimRequest {
+  scannerJobId?: string;
+  scan?: ScannerRunRequest;
+  initialCapital: number;
+  maxHoldings?: number;
+  targetPercent?: number;
+  stoplossPercent?: number;
+}
+
+export interface PortfolioClosedTrade {
+  symbol: string;
+  buyDate: string;
+  sellDate: string;
+  buyPrice: number;
+  sellPrice: number;
+  investmentAmount: number;
+  quantity: number;
+  profitLoss: number;
+  returnPct: number;
+  exitReason: 'TARGET' | 'STOPLOSS';
+}
+
+export interface PortfolioSimMetrics {
+  mode: PortfolioSimulationMode;
+  initialCapital: number;
+  availableCash: number;
+  portfolioValue: number;
+  investmentPerStock: number;
+  openPositions: number;
+  closedPositions: number;
+  totalTrades: number;
+  winningTrades: number;
+  losingTrades: number;
+  winRate: number;
+  totalRealizedProfit: number;
+  totalUnrealizedProfit: number;
+  totalReturnPct: number;
+  cagrPercent: number | null;
+  maxDrawdownPct: number;
+}
+
+export interface PortfolioSimResult {
+  metrics: PortfolioSimMetrics;
+  closedTrades: PortfolioClosedTrade[];
+  openPositions: Array<{
+    symbol: string;
+    buyDate: string;
+    buyPrice: number;
+    quantity: number;
+    investmentAmount: number;
+    currentPrice: number;
+    marketValue: number;
+    unrealizedProfit: number;
+    principalReturned: number;
+  }>;
+  ignoredBuySignals: number;
+  ignoredBuys: IgnoredBuySignal[];
+  buysExecuted: number;
+}
+
+export type IgnoredBuyReason = 'max_holdings' | 'insufficient_cash';
+
+export interface IgnoredBuySignal {
+  symbol: string;
+  entryDate: string;
+  entryPrice: number;
+  reason: IgnoredBuyReason;
+  openPositionsAtSkip: number;
+  availableCashAtSkip: number;
+  requiredInvestment: number;
+}
+
+export interface PortfolioComparisonResponse {
+  signalCount: number;
+  simulationStart: string | null;
+  simulationEnd: string | null;
+  compound: PortfolioSimResult;
+  withdrawPrincipal: PortfolioSimResult;
+}
+
+export interface BacktestPortfolioRequest {
+  backtestJobId: string;
+  initialCapital: number;
+  maxHoldings?: number;
+  targetPercent?: number;
+  stoplossPercent?: number;
+}
+
+export interface BacktestPortfolioComparison {
+  signalCount: number;
+  pullbackEntryCount: number;
+  combinedEntryCount: number;
+  simulationStart: string | null;
+  simulationEnd: string | null;
+  config: {
+    initialCapital: number;
+    maxHoldings: number;
+    targetPercent: number;
+    stoplossPercent: number;
+  };
+  case1: PortfolioSimResult;
+  case2: PortfolioSimResult;
+  case3Compound: PortfolioSimResult;
+  case3Withdraw: PortfolioSimResult;
+  case4: PortfolioSimResult;
+}

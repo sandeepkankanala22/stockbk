@@ -6,6 +6,7 @@ import { getDashboardResults, SYMBOL_REAPPEAR_MONTHS } from '../utils/symbolDate
 import { buildInvestorDashboard } from '../utils/investorDashboardBuilder';
 import DuplicateSymbolsPanel from './DuplicateSymbolsPanel';
 import InvestorDashboard from './InvestorDashboard';
+import BacktestPortfolioPanel from './BacktestPortfolioPanel';
 import NearBuyBandPanel from './NearBuyBandPanel';
 import OpenStocksPanel from './OpenStocksPanel';
 
@@ -17,6 +18,7 @@ interface SummaryCardsProps {
   duplicateSymbolNotes: SymbolDuplicateNote[];
   nearBuyPlusPct: number;
   nearBuyMinusPct: number;
+  jobId?: string | null;
 }
 
 function MetricTable({
@@ -61,6 +63,7 @@ export default function SummaryCards({
   duplicateSymbolNotes,
   nearBuyPlusPct,
   nearBuyMinusPct,
+  jobId,
 }: SummaryCardsProps) {
   const { dashboard, dashboardRows } = useMemo(() => {
     const { rows } = getDashboardResults(results);
@@ -97,6 +100,9 @@ export default function SummaryCards({
             plusPct={nearBuyPlusPct}
             minusPct={nearBuyMinusPct}
           />
+          {jobId && (
+            <BacktestPortfolioPanel jobId={jobId} config={config} />
+          )}
         </>
       ) : (
         <Paper sx={{ p: 2, mb: 2 }}>

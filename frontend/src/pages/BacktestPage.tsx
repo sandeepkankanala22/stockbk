@@ -242,6 +242,7 @@ export default function BacktestPage() {
             duplicateSymbolNotes={resultsData.duplicateSymbolNotes ?? []}
             nearBuyPlusPct={resultsData.config?.nearBuyPlusPct ?? config.nearBuyPlusPct}
             nearBuyMinusPct={resultsData.config?.nearBuyMinusPct ?? config.nearBuyMinusPct}
+            jobId={jobId}
           />
         )}
 

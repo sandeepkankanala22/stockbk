@@ -12,6 +12,7 @@ import {
   searchScannerSymbolsHandler,
   startScanner,
 } from '../controllers/scannerController.js';
+import { simulateBacktestPortfolio, simulatePortfolio } from '../controllers/portfolioController.js';
 import { resetState, uploadFile } from '../controllers/uploadController.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { validateBacktest } from '../middleware/validateBacktest.js';
@@ -48,5 +49,8 @@ router.post('/scanner/run', startScanner);
 router.get('/scanner/status', getScannerStatus);
 router.get('/scanner/results', getScannerResults);
 router.get('/scanner/export/csv', exportScannerCsv);
+
+router.post('/portfolio/simulate', simulatePortfolio);
+router.post('/portfolio/simulate-backtest', simulateBacktestPortfolio);
 
 export default router;

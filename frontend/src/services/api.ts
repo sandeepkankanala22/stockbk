@@ -12,6 +12,10 @@ import type {
   ScannerStatusResponse,
   ScannerSymbolSearchResponse,
   StatusResponse,
+  PortfolioComparisonResponse,
+  PortfolioSimRequest,
+  BacktestPortfolioComparison,
+  BacktestPortfolioRequest,
   UploadResponse,
 } from '../types';
 
@@ -112,6 +116,26 @@ export async function getScannerResults(jobId: string): Promise<ScannerResultsRe
 
 export function getScannerExportCsvUrl(jobId: string): string {
   return `/api/scanner/export/csv?jobId=${encodeURIComponent(jobId)}`;
+}
+
+export async function simulateBacktestPortfolio(
+  request: BacktestPortfolioRequest
+): Promise<BacktestPortfolioComparison> {
+  const { data } = await api.post<BacktestPortfolioComparison>(
+    '/portfolio/simulate-backtest',
+    request,
+    { timeout: 600000 }
+  );
+  return data;
+}
+
+export async function simulatePortfolio(
+  request: PortfolioSimRequest
+): Promise<PortfolioComparisonResponse> {
+  const { data } = await api.post<PortfolioComparisonResponse>('/portfolio/simulate', request, {
+    timeout: 600000,
+  });
+  return data;
 }
 
 export default api;
