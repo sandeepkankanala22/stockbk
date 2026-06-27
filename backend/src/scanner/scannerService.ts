@@ -12,6 +12,7 @@ import {
 } from './scannerPeriod.js';
 import {
   resolveScannerSymbols,
+  isInternationalUniverse,
   type ScannerSector,
   type ScannerUniverse,
 } from './scannerUniverse.js';
@@ -55,7 +56,8 @@ export class ScannerService {
             row.symbol,
             row.company,
             fetchStart,
-            cutoff
+            cutoff,
+            isInternationalUniverse(universe)
           );
           if (symbolSignals.length > 0) {
             allSignals.push(...symbolSignals);
@@ -92,9 +94,10 @@ export class ScannerService {
     symbol: string,
     company: string,
     fetchStart: string,
-    signalAfterDate: string | null
+    signalAfterDate: string | null,
+    preferBare = false
   ): Promise<ScannerSignal[]> {
-    let monthly = await this.loadMonthlyBars(symbol, fetchStart);
+    let monthly = await this.loadMonthlyBars(symbol, fetchStart, preferBare);
     if (monthly.length <= MIN_MONTHS_FOR_SCAN) return [];
 
     const technical = findTechnicalSignalMonths(monthly, signalAfterDate);
@@ -103,14 +106,19 @@ export class ScannerService {
     return technical.map((hit) => buildSignalMetrics(symbol, company, monthly, hit.index));
   }
 
-  private async loadMonthlyBars(symbol: string, fetchStart: string) {
-    const dailyResult = await yahooFinanceService.fetchForSymbol(symbol, fetchStart);
+  private async loadMonthlyBars(symbol: string, fetchStart: string, preferBare = false) {
+    const fetchOpts = preferBare ? { preferBare: true } : undefined;
+    const dailyResult = await yahooFinanceService.fetchForSymbol(symbol, fetchStart, fetchOpts);
     if (!dailyResult.error && dailyResult.bars.length > 0) {
       const fromDaily = aggregateDailyToMonthly(dailyResult.bars);
       if (fromDaily.length > MIN_MONTHS_FOR_SCAN) return fromDaily;
     }
 
-    const monthlyResult = await yahooFinanceService.fetchMonthlyForSymbol(symbol, fetchStart);
+    const monthlyResult = await yahooFinanceService.fetchMonthlyForSymbol(
+      symbol,
+      fetchStart,
+      fetchOpts
+    );
     if (!monthlyResult.error && monthlyResult.bars.length > 0) {
       const monthly = normalizeYahooMonthlyBars(monthlyResult.bars);
       if (monthly.length > MIN_MONTHS_FOR_SCAN) return monthly;

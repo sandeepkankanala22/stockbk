@@ -1,5 +1,6 @@
-import type { OhlcvBar } from '../types/index.js';
+import type { OhlcvBar, SameDayHitMode } from '../types/index.js';
 import type { HitSequenceAnalysis, Scenario2Analysis } from './stoplossAnalysis.js';
+import { findFirstHitAfterDate } from './stoplossAnalysis.js';
 import { diffDays } from '../utils/dateParser.js';
 
 export interface InvestorPathAnalysis {
@@ -8,6 +9,13 @@ export interface InvestorPathAnalysis {
   lowHitBuyAfterFtt: boolean;
   lowHitBuyAfterFttDate: string | null;
   lowHitSlAfterFtt: boolean;
+  targetAfterPullbackHit: boolean;
+  targetAfterPullbackDate: string | null;
+  stoplossAfterPullbackHit: boolean;
+  stoplossAfterPullbackDate: string | null;
+  firstHitAfterPullback: 'TARGET' | 'STOPLOSS' | null;
+  firstHitAfterPullbackDate: string | null;
+  firstHitAfterPullbackDays: number | null;
   targetAfterRecovery: boolean;
   targetAfterRecoveryDate: string | null;
   newAthAfterRecoveryTarget: boolean;
@@ -20,6 +28,13 @@ const emptyInvestorPath: InvestorPathAnalysis = {
   lowHitBuyAfterFtt: false,
   lowHitBuyAfterFttDate: null,
   lowHitSlAfterFtt: false,
+  targetAfterPullbackHit: false,
+  targetAfterPullbackDate: null,
+  stoplossAfterPullbackHit: false,
+  stoplossAfterPullbackDate: null,
+  firstHitAfterPullback: null,
+  firstHitAfterPullbackDate: null,
+  firstHitAfterPullbackDays: null,
   targetAfterRecovery: false,
   targetAfterRecoveryDate: null,
   newAthAfterRecoveryTarget: false,
@@ -83,8 +98,10 @@ export function analyzeInvestorPaths(
   bars: OhlcvBar[],
   buyPrice: number,
   targetPrice: number,
+  stoplossPrice: number,
   hitSeq: HitSequenceAnalysis,
-  scenario2: Scenario2Analysis | null
+  scenario2: Scenario2Analysis | null,
+  sameDayHitMode: SameDayHitMode
 ): InvestorPathAnalysis {
   if (!hitSeq.firstHit) {
     return emptyInvestorPath;
@@ -95,6 +112,13 @@ export function analyzeInvestorPaths(
   let lowHitBuyAfterFtt = false;
   let lowHitBuyAfterFttDate: string | null = null;
   let lowHitSlAfterFtt = false;
+  let targetAfterPullbackHit = false;
+  let targetAfterPullbackDate: string | null = null;
+  let stoplossAfterPullbackHit = false;
+  let stoplossAfterPullbackDate: string | null = null;
+  let firstHitAfterPullback: 'TARGET' | 'STOPLOSS' | null = null;
+  let firstHitAfterPullbackDate: string | null = null;
+  let firstHitAfterPullbackDays: number | null = null;
 
   if (hitSeq.firstHit === 'TARGET' && hitSeq.targetHitTillDate && hitSeq.targetHitDate) {
     const baseline = maxHighUpTo(bars, hitSeq.targetHitDate);
@@ -105,6 +129,24 @@ export function analyzeInvestorPaths(
     lowHitBuyAfterFtt = buyPullback.hit;
     lowHitBuyAfterFttDate = buyPullback.date;
     lowHitSlAfterFtt = hitSeq.stoplossAfterTargetHit;
+
+    if (buyPullback.hit && buyPullback.date) {
+      const afterPb = findFirstHitAfterDate(
+        bars,
+        buyPullback.date,
+        targetPrice,
+        stoplossPrice,
+        sameDayHitMode
+      );
+      firstHitAfterPullback = afterPb.firstHit;
+      firstHitAfterPullbackDate = afterPb.date;
+      firstHitAfterPullbackDays =
+        afterPb.date != null ? diffDays(buyPullback.date, afterPb.date) : null;
+      targetAfterPullbackHit = afterPb.firstHit === 'TARGET';
+      targetAfterPullbackDate = afterPb.firstHit === 'TARGET' ? afterPb.date : null;
+      stoplossAfterPullbackHit = afterPb.firstHit === 'STOPLOSS';
+      stoplossAfterPullbackDate = afterPb.firstHit === 'STOPLOSS' ? afterPb.date : null;
+    }
   }
 
   let targetAfterRecovery = false;
@@ -134,6 +176,13 @@ export function analyzeInvestorPaths(
     lowHitBuyAfterFtt,
     lowHitBuyAfterFttDate,
     lowHitSlAfterFtt,
+    targetAfterPullbackHit,
+    targetAfterPullbackDate,
+    stoplossAfterPullbackHit,
+    stoplossAfterPullbackDate,
+    firstHitAfterPullback,
+    firstHitAfterPullbackDate,
+    firstHitAfterPullbackDays,
     targetAfterRecovery,
     targetAfterRecoveryDate,
     newAthAfterRecoveryTarget,

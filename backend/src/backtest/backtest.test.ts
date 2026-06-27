@@ -91,6 +91,17 @@ describe('dateUtils', () => {
     assert.equal(result, '2013-06-03');
   });
 
+  it('finds breakout when high touches buy price exactly', () => {
+    const touchBars: OhlcvBar[] = [
+      ...mayBars.slice(0, 5),
+      { date: '2013-06-05', open: 845, high: 850, low: 843, close: 848, volume: 1000 },
+    ];
+    const result = findBreakoutDate(touchBars, '2013-06-03', 850);
+    assert.ok(result);
+    assert.equal(result!.date, '2013-06-05');
+    assert.equal(result!.high, 850);
+  });
+
   it('finds breakout when high exceeds buy price', () => {
     const result = findBreakoutDate(mayBars, '2013-06-03', 850);
     assert.ok(result);

@@ -32,9 +32,36 @@ export interface InvestorDashboardData {
   overview: DashboardMetricRow[];
   fttData: DashboardMetricRow[];
   fslData: DashboardMetricRow[];
+  signalPullback: SignalPullbackComparison | null;
   errors: { symbol: string; message: string }[];
   duplicatesDropped: number;
   rawCount: number;
+}
+
+export interface PieSlice {
+  name: string;
+  value: number;
+  pct: number;
+  color: string;
+}
+
+export interface PathMetricStat {
+  label: string;
+  count: number;
+  pct: number;
+  days: DaysTiming | null;
+}
+
+export interface BuyPathColumn {
+  title: string;
+  totalTrades: number;
+  metrics: PathMetricStat[];
+  pieSlices: PieSlice[];
+}
+
+export interface SignalPullbackComparison {
+  signalBuys: BuyPathColumn;
+  pullbackBuys: BuyPathColumn;
 }
 
 function computeDaysTiming(values: (number | null | undefined)[]): DaysTiming | null {
@@ -98,7 +125,6 @@ export function buildInvestorDashboard(results: TradeResult[]): InvestorDashboar
   const fslCount = fsl.length;
 
   const fttNewAth = ftt.filter((r) => r.newAthAfterFtt === true);
-  const fttLowBuy = ftt.filter((r) => r.lowHitBuyAfterFtt === true);
   const fttLowSl = ftt.filter((r) => r.lowHitSlAfterFtt === true);
 
   const actionableCount = actionable.length;
@@ -113,6 +139,7 @@ export function buildInvestorDashboard(results: TradeResult[]): InvestorDashboar
     actionableStocks: actionable.length,
     duplicatesDropped: 0,
     rawCount,
+    signalPullback: buildSignalPullbackComparison(rows),
     overview: [
       row('Total stocks (backtest runs)', total, total, null, null),
       row(
@@ -148,14 +175,6 @@ export function buildInvestorDashboard(results: TradeResult[]): InvestorDashboar
         fttCount,
         computeDaysTiming(daysFromDates(fttNewAth, 'targetHitDate', 'newAthAfterFttDate')),
         'Fresh all-time high after first target'
-      ),
-      row(
-        'Pullback to buy price after FTT',
-        fttLowBuy.length,
-        total,
-        fttCount,
-        computeDaysTiming(daysFromDates(fttLowBuy, 'targetHitDate', 'lowHitBuyAfterFttDate')),
-        'Low touched entry after target — profit giveback risk'
       ),
       row(
         'Pullback to stop loss after FTT',
@@ -217,6 +236,208 @@ export function buildInvestorDashboard(results: TradeResult[]): InvestorDashboar
       ),
     ],
     errors,
+  };
+}
+
+function firstHitAfterPullbackFromPath(trade: TradeResult): 'TARGET' | 'STOPLOSS' | null {
+  if (!trade.lowHitBuyAfterFttDate || !trade.pricePath?.length || trade.buyPrice == null) {
+    return null;
+  }
+  const targetPct =
+    trade.targetPrice != null ? ((trade.targetPrice / trade.buyPrice) - 1) * 100 : 30;
+  const stopPct =
+    trade.stoplossPrice != null ? ((trade.stoplossPrice / trade.buyPrice) - 1) * 100 : -30;
+
+  const afterPullback = trade.pricePath
+    .filter((p) => p.date > trade.lowHitBuyAfterFttDate!)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  for (const p of afterPullback) {
+    const targetHit = p.pct >= targetPct - 0.5;
+    const stopHit = p.pct <= stopPct + 0.5;
+    if (targetHit && stopHit) {
+      return 'STOPLOSS';
+    }
+    if (targetHit) return 'TARGET';
+    if (stopHit) return 'STOPLOSS';
+  }
+  return null;
+}
+
+function resolveFirstHitAfterPullback(trade: TradeResult): 'TARGET' | 'STOPLOSS' | 'OPEN' {
+  if (!trade.lowHitBuyAfterFttDate || trade.firstHit !== 'TARGET') return 'OPEN';
+  if (trade.firstHitAfterPullback != null) {
+    return trade.firstHitAfterPullback === 'TARGET' ? 'TARGET' : trade.firstHitAfterPullback === 'STOPLOSS' ? 'STOPLOSS' : 'OPEN';
+  }
+  const fromPath = firstHitAfterPullbackFromPath(trade);
+  if (fromPath) return fromPath;
+  if (trade.targetAfterPullbackHit && trade.stoplossAfterPullbackHit) {
+    const tDate = trade.targetAfterPullbackDate;
+    const sDate = trade.stoplossAfterPullbackDate;
+    if (tDate && sDate) return tDate <= sDate ? 'TARGET' : 'STOPLOSS';
+  }
+  if (trade.targetAfterPullbackHit) return 'TARGET';
+  if (trade.stoplossAfterPullbackHit) return 'STOPLOSS';
+  return 'OPEN';
+}
+
+function resolveFirstHitAfterPullbackDate(trade: TradeResult): string | null {
+  if (trade.firstHitAfterPullbackDate) return trade.firstHitAfterPullbackDate;
+  const hit = resolveFirstHitAfterPullback(trade);
+  if (hit === 'TARGET') return trade.targetAfterPullbackDate ?? null;
+  if (hit === 'STOPLOSS') return trade.stoplossAfterPullbackDate ?? null;
+  if (!trade.pricePath?.length || !trade.lowHitBuyAfterFttDate) return null;
+  const targetPct =
+    trade.buyPrice && trade.targetPrice ? ((trade.targetPrice / trade.buyPrice) - 1) * 100 : 30;
+  const stopPct =
+    trade.buyPrice && trade.stoplossPrice ? ((trade.stoplossPrice / trade.buyPrice) - 1) * 100 : -30;
+  const afterPullback = trade.pricePath
+    .filter((p) => p.date > trade.lowHitBuyAfterFttDate!)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  for (const p of afterPullback) {
+    const targetHit = p.pct >= targetPct - 0.5;
+    const stopHit = p.pct <= stopPct + 0.5;
+    if (targetHit || stopHit) return p.date;
+  }
+  return null;
+}
+
+function resolveTargetAfterPullbackDate(trade: TradeResult): string | null {
+  if (resolveFirstHitAfterPullback(trade) !== 'TARGET') return null;
+  return trade.firstHitAfterPullbackDate ?? trade.targetAfterPullbackDate ?? null;
+}
+
+function resolveStoplossAfterPullbackDate(trade: TradeResult): string | null {
+  if (resolveFirstHitAfterPullback(trade) !== 'STOPLOSS') return null;
+  return trade.firstHitAfterPullbackDate ?? trade.stoplossAfterPullbackDate ?? null;
+}
+
+function daysAfterPullbackToTarget(trade: TradeResult): number | null {
+  const targetDate = resolveTargetAfterPullbackDate(trade);
+  if (!trade.lowHitBuyAfterFttDate || !targetDate) return null;
+  return diffDays(trade.lowHitBuyAfterFttDate, targetDate);
+}
+
+function daysAfterPullbackToSl(trade: TradeResult): number | null {
+  const slDate = resolveStoplossAfterPullbackDate(trade);
+  if (!trade.lowHitBuyAfterFttDate || !slDate) return null;
+  return diffDays(trade.lowHitBuyAfterFttDate, slDate);
+}
+
+function buildPieSlices(
+  slices: Array<{ name: string; count: number; color: string }>,
+  total: number
+): PieSlice[] {
+  return slices
+    .filter((s) => s.count > 0)
+    .map((s) => ({
+      name: s.name,
+      value: s.count,
+      pct: pct(s.count, total),
+      color: s.color,
+    }));
+}
+
+function pathMetric(
+  label: string,
+  count: number,
+  total: number,
+  days: DaysTiming | null
+): PathMetricStat {
+  return { label, count, pct: pct(count, total), days };
+}
+
+function pullbackOutcomeAfterDate(trade: TradeResult): 'TARGET' | 'STOPLOSS' | 'OPEN' {
+  return resolveFirstHitAfterPullback(trade);
+}
+
+function phase1OutcomeLabel(trade: TradeResult): string {
+  if (trade.result === 'NO_BREAKOUT' || !trade.buyDate) return 'OPEN (No Buy)';
+  if (trade.firstHit === 'TARGET') return 'FTT';
+  if (trade.firstHit === 'STOPLOSS') return 'FSL';
+  return 'SIDEWAYS';
+}
+
+function phase2OutcomeLabel(trade: TradeResult): string {
+  if (!trade.lowHitBuyAfterFttDate || trade.firstHit !== 'TARGET') return '';
+  const hit = resolveFirstHitAfterPullback(trade);
+  if (hit === 'TARGET') return 'FTT';
+  if (hit === 'STOPLOSS') return 'FSL';
+  return 'SIDEWAYS';
+}
+
+export function buildSignalPullbackComparison(results: TradeResult[]): SignalPullbackComparison | null {
+  const actionable = results.filter(
+    (r) => r.buyDate != null && r.result !== 'ERROR' && r.result !== 'NO_BREAKOUT'
+  );
+  if (actionable.length === 0) return null;
+
+  const signalTotal = actionable.length;
+  const fttTrades = actionable.filter((r) => r.firstHit === 'TARGET');
+  const fslTrades = actionable.filter((r) => r.firstHit === 'STOPLOSS');
+  const openTrades = actionable.filter((r) => r.firstHit !== 'TARGET' && r.firstHit !== 'STOPLOSS');
+
+  const pullbackTrades = actionable.filter(
+    (r) => r.lowHitBuyAfterFtt === true && r.lowHitBuyAfterFttDate
+  );
+  const pullbackTotal = pullbackTrades.length;
+  const targetAfterPb = pullbackTrades.filter((t) => pullbackOutcomeAfterDate(t) === 'TARGET');
+  const slAfterPb = pullbackTrades.filter((t) => pullbackOutcomeAfterDate(t) === 'STOPLOSS');
+  const pullbackPending = pullbackTrades.filter((t) => pullbackOutcomeAfterDate(t) === 'OPEN');
+
+  return {
+    signalBuys: {
+      title: 'Signal Buys',
+      totalTrades: signalTotal,
+      metrics: [
+        pathMetric(
+          'FTT (First Time Target)',
+          fttTrades.length,
+          signalTotal,
+          computeDaysTiming(fttTrades.map((r) => r.firstHitDays))
+        ),
+        pathMetric(
+          'FSL (First Stop Loss)',
+          fslTrades.length,
+          signalTotal,
+          computeDaysTiming(fslTrades.map((r) => r.firstHitDays))
+        ),
+      ],
+      pieSlices: buildPieSlices(
+        [
+          { name: 'FTT', count: fttTrades.length, color: '#2e7d32' },
+          { name: 'FSL', count: fslTrades.length, color: '#c62828' },
+          { name: 'Open / Pending', count: openTrades.length, color: '#757575' },
+        ],
+        signalTotal
+      ),
+    },
+    pullbackBuys: {
+      title: 'Pullback Buys',
+      totalTrades: pullbackTotal,
+      metrics: [
+        pathMetric(
+          'Target hit after pullback (+30% from buy)',
+          targetAfterPb.length,
+          pullbackTotal || 1,
+          computeDaysTiming(targetAfterPb.map(daysAfterPullbackToTarget))
+        ),
+        pathMetric(
+          'Stop loss hit after pullback (−30% from buy)',
+          slAfterPb.length,
+          pullbackTotal || 1,
+          computeDaysTiming(slAfterPb.map(daysAfterPullbackToSl))
+        ),
+      ],
+      pieSlices: buildPieSlices(
+        [
+          { name: 'Target after pullback', count: targetAfterPb.length, color: '#2e7d32' },
+          { name: 'SL after pullback', count: slAfterPb.length, color: '#c62828' },
+          { name: 'Open / Pending', count: pullbackPending.length, color: '#757575' },
+        ],
+        pullbackTotal || 1
+      ),
+    },
   };
 }
 
@@ -473,6 +694,126 @@ export function buildFttPullbackTable(results: TradeResult[]): FttPullbackRow[] 
       daysFttToPullback: diffDays(r.targetHitDate!, r.lowHitBuyAfterFttDate!),
       pctFromBuyAfterPullback: pctFromBuyAfterPullbackDate(r),
     }));
+}
+
+export interface AllTradesExportRow {
+  symbol: string;
+  signalDate: string;
+  monthHighDate: string;
+  buyPrice: number | null;
+  buyDate: string;
+  targetPrice: number | null;
+  stoplossPrice: number | null;
+  phase1Outcome: string;
+  phase1HitDate: string;
+  phase1HitDays: string;
+  fttDate: string;
+  fslDate: string;
+  fallbackToBuyDate: string;
+  phase2FirstHit: string;
+  phase2HitDate: string;
+  phase2HitDays: string;
+  currentPctFromBuy: string;
+  status: string;
+}
+
+function csvCell(value: string | number | null | undefined): string {
+  const s = value == null ? '' : String(value);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function fmtDays(d: number | null | undefined): string {
+  return d == null ? '' : String(d);
+}
+
+export function buildAllTradesExportRows(results: TradeResult[]): AllTradesExportRow[] {
+  const { rows } = getDashboardResults(results);
+
+  return rows
+    .filter((r) => r.result !== 'ERROR')
+    .map((r) => {
+      const phase1 = phase1OutcomeLabel(r);
+      const phase1HitDate =
+        r.firstHit === 'TARGET'
+          ? r.targetHitDate ?? r.firstHitDate ?? ''
+          : r.firstHit === 'STOPLOSS'
+            ? r.stoplossHitDate ?? r.firstHitDate ?? ''
+            : '';
+      const phase2Hit = phase2OutcomeLabel(r);
+      const phase2Date = resolveFirstHitAfterPullbackDate(r) ?? '';
+      const phase2Days =
+        r.firstHitAfterPullbackDays ??
+        (r.lowHitBuyAfterFttDate && phase2Date
+          ? diffDays(r.lowHitBuyAfterFttDate, phase2Date)
+          : null);
+
+      return {
+        symbol: r.symbol,
+        signalDate: r.minDate,
+        monthHighDate: r.monthHighDate ?? '',
+        buyPrice: r.buyPrice,
+        buyDate: r.buyDate ?? '',
+        targetPrice: r.targetPrice,
+        stoplossPrice: r.stoplossPrice,
+        phase1Outcome: phase1,
+        phase1HitDate,
+        phase1HitDays: fmtDays(r.firstHitDays),
+        fttDate: r.firstHit === 'TARGET' ? r.targetHitDate ?? '' : '',
+        fslDate: r.firstHit === 'STOPLOSS' ? r.stoplossHitDate ?? '' : '',
+        fallbackToBuyDate: r.lowHitBuyAfterFttDate ?? '',
+        phase2FirstHit: phase2Hit,
+        phase2HitDate: phase2Date,
+        phase2HitDays: fmtDays(phase2Days),
+        currentPctFromBuy: r.pctFromBuyPrice != null ? r.pctFromBuyPrice.toFixed(2) : '',
+        status: r.result,
+      };
+    })
+    .sort((a, b) => {
+      const d = a.signalDate.localeCompare(b.signalDate);
+      if (d !== 0) return d;
+      return a.symbol.localeCompare(b.symbol);
+    });
+}
+
+export function buildAllTradesExportCsv(results: TradeResult[]): string {
+  const rows = buildAllTradesExportRows(results);
+  const headers: (keyof AllTradesExportRow)[] = [
+    'symbol',
+    'signalDate',
+    'monthHighDate',
+    'buyPrice',
+    'buyDate',
+    'targetPrice',
+    'stoplossPrice',
+    'phase1Outcome',
+    'phase1HitDate',
+    'phase1HitDays',
+    'fttDate',
+    'fslDate',
+    'fallbackToBuyDate',
+    'phase2FirstHit',
+    'phase2HitDate',
+    'phase2HitDays',
+    'currentPctFromBuy',
+    'status',
+  ];
+  const headerLine = headers.join(',');
+  const dataLines = rows.map((row) => headers.map((h) => csvCell(row[h])).join(','));
+  return [headerLine, ...dataLines].join('\n');
+}
+
+export function downloadAllTradesExport(results: TradeResult[], filename = 'all-trades-phase1-phase2.csv'): void {
+  const csv = buildAllTradesExportCsv(results);
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function buildBuyMonthTable(results: TradeResult[]): BuyMonthRow[] {

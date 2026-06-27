@@ -6,8 +6,6 @@ import {
   buildPullbackBuyEntries,
   buildSignalBuyEntries,
 } from './backtestPortfolioService.js';
-import { runPortfolioSimulation } from './portfolioSimulator.js';
-import type { SignalExitPlan } from './portfolioExitResolver.js';
 
 function baseTrade(overrides: Partial<TradeResult>): TradeResult {
   return {
@@ -56,6 +54,13 @@ function baseTrade(overrides: Partial<TradeResult>): TradeResult {
     newAthAfterRecoveryTarget: null,
     newAthAfterFttDate: null,
     lowHitBuyAfterFttDate: '2020-08-01',
+    targetAfterPullbackHit: null,
+    targetAfterPullbackDate: null,
+    stoplossAfterPullbackHit: null,
+    stoplossAfterPullbackDate: null,
+    firstHitAfterPullback: null,
+    firstHitAfterPullbackDate: null,
+    firstHitAfterPullbackDays: null,
     targetAfterRecoveryDate: null,
     newAthAfterRecoveryTargetDate: null,
     pricePath: null,
@@ -90,51 +95,5 @@ describe('backtest portfolio entries', () => {
     const trade = baseTrade({ lowHitBuyAfterFtt: false, lowHitBuyAfterFttDate: null });
     assert.equal(buildPullbackBuyEntries([trade]).length, 0);
     assert.equal(buildSignalBuyEntries([trade]).length, 1);
-  });
-});
-
-describe('case 4 unlimited holdings', () => {
-  it('case 4 config does not skip buys due to max holdings', () => {
-    const plans: SignalExitPlan[] = Array.from({ length: 25 }, (_, i) => {
-      const d = `2024-${String(i + 1).padStart(2, '0')}-01`;
-      return {
-        signalKey: `S${i}:${d}`,
-        symbol: `S${i}`,
-        signalDate: d,
-        entryPrice: 100,
-        targetPrice: 130,
-        stoplossPrice: 70,
-        lastPrice: 100,
-        lastDate: d,
-        fullExitDate: null,
-        fullExitPrice: null,
-        fullExitReason: null,
-        partialTargetDate: null,
-        partialTargetPrice: null,
-        remainderSlDate: null,
-        remainderSlPrice: null,
-        slBeforeTargetDate: null,
-        slBeforeTargetPrice: null,
-      };
-    });
-
-    const capped = runPortfolioSimulation(plans, {
-      initialCapital: 1_000_000,
-      maxHoldings: 20,
-      targetPercent: 30,
-      stoplossPercent: 30,
-      enforceMaxHoldings: true,
-    });
-    const uncapped = runPortfolioSimulation(plans, {
-      initialCapital: 1_000_000,
-      maxHoldings: 20,
-      targetPercent: 30,
-      stoplossPercent: 30,
-      enforceMaxHoldings: false,
-    });
-
-    assert.ok(capped.ignoredBuys.some((b) => b.reason === 'max_holdings'));
-    assert.equal(uncapped.ignoredBuys.filter((b) => b.reason === 'max_holdings').length, 0);
-    assert.ok(uncapped.buysExecuted > capped.buysExecuted);
   });
 });

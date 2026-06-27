@@ -78,6 +78,19 @@ function findFirstStoplossHit(
   return { hit: false, date: null, days: null };
 }
 
+function resolveSameDayFirstHit(
+  targetHit: boolean,
+  stoplossHit: boolean,
+  sameDayHitMode: SameDayHitMode
+): FirstHitType | null {
+  if (targetHit && stoplossHit) {
+    return sameDayHitMode === 'TARGET_FIRST' ? 'TARGET' : 'STOPLOSS';
+  }
+  if (targetHit) return 'TARGET';
+  if (stoplossHit) return 'STOPLOSS';
+  return null;
+}
+
 function findFirstHit(
   bars: OhlcvBar[],
   buyDate: string,
@@ -88,22 +101,39 @@ function findFirstHit(
   for (const bar of bars) {
     if (bar.date <= buyDate) continue;
 
-    const targetHit = bar.high >= targetPrice;
-    const stoplossHit = bar.low <= stoplossPrice;
-
-    if (targetHit && stoplossHit) {
-      const firstHit: FirstHitType =
-        sameDayHitMode === 'TARGET_FIRST' ? 'TARGET' : 'STOPLOSS';
+    const firstHit = resolveSameDayFirstHit(
+      bar.high >= targetPrice,
+      bar.low <= stoplossPrice,
+      sameDayHitMode
+    );
+    if (firstHit) {
       return { firstHit, date: bar.date, days: diffDays(buyDate, bar.date) };
-    }
-    if (targetHit) {
-      return { firstHit: 'TARGET', date: bar.date, days: diffDays(buyDate, bar.date) };
-    }
-    if (stoplossHit) {
-      return { firstHit: 'STOPLOSS', date: bar.date, days: diffDays(buyDate, bar.date) };
     }
   }
   return { firstHit: null, date: null, days: null };
+}
+
+/** First ±target/stop hit strictly after `afterDate` (used for post-pullback phase 2). */
+export function findFirstHitAfterDate(
+  bars: OhlcvBar[],
+  afterDate: string,
+  targetPrice: number,
+  stoplossPrice: number,
+  sameDayHitMode: SameDayHitMode
+): { firstHit: FirstHitType; date: string | null } {
+  for (const bar of bars) {
+    if (bar.date <= afterDate) continue;
+
+    const firstHit = resolveSameDayFirstHit(
+      bar.high >= targetPrice,
+      bar.low <= stoplossPrice,
+      sameDayHitMode
+    );
+    if (firstHit) {
+      return { firstHit, date: bar.date };
+    }
+  }
+  return { firstHit: null, date: null };
 }
 
 function findStoplossAfterDate(

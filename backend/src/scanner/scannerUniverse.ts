@@ -3,7 +3,14 @@ import path from 'path';
 import type { NseEquityRow } from './nseSymbolService.js';
 import { nseSymbolService } from './nseSymbolService.js';
 
-export type ScannerUniverse = 'nifty100' | 'nifty500' | 'all' | 'custom';
+export type ScannerUniverse =
+  | 'nifty100'
+  | 'nifty500'
+  | 'all'
+  | 'us100'
+  | 'bitcoin20'
+  | 'commodities'
+  | 'custom';
 
 export type ScannerSector =
   | 'all'
@@ -28,8 +35,13 @@ const UNIVERSE_LABELS: Record<ScannerUniverse, string> = {
   nifty100: 'Nifty 100',
   nifty500: 'Nifty 500',
   all: 'All NSE EQ',
+  us100: 'Top 100 US Stocks',
+  bitcoin20: 'Top 20 Crypto (Bitcoin & majors)',
+  commodities: 'Top Commodities',
   custom: 'Custom list',
 };
+
+const INTERNATIONAL_UNIVERSES = new Set<ScannerUniverse>(['us100', 'bitcoin20', 'commodities']);
 
 const SECTOR_LABELS: Record<ScannerSector, string> = {
   all: 'All sectors',
@@ -47,16 +59,13 @@ const SECTOR_LABELS: Record<ScannerSector, string> = {
 };
 
 function dataPath(...parts: string[]): string {
-  const candidates = [
-    path.resolve(process.cwd(), 'data', ...parts),
-    path.resolve(process.cwd(), 'backend/data', ...parts),
-  ];
-  return candidates[0];
+  return path.resolve(process.cwd(), 'data', ...parts);
 }
 
 async function readSymbolListFile(fileName: string): Promise<string[]> {
   const candidates = [
     dataPath('indices', fileName),
+    path.resolve(process.cwd(), 'backend/data/indices', fileName),
     dataPath(fileName),
   ];
   for (const filePath of candidates) {
@@ -98,8 +107,30 @@ async function fetchNseIndexSymbols(indexName: string): Promise<string[]> {
   }
 }
 
+async function loadBundledUniverseSymbols(universe: ScannerUniverse): Promise<string[]> {
+  switch (universe) {
+    case 'nifty100':
+      return readSymbolListFile('nifty100.txt');
+    case 'nifty500':
+      return readSymbolListFile('nifty500.txt');
+    case 'us100':
+      return readSymbolListFile('us100.txt');
+    case 'bitcoin20':
+      return readSymbolListFile('bitcoin20.txt');
+    case 'commodities':
+      return readSymbolListFile('commodities.txt');
+    default:
+      return [];
+  }
+}
+
 async function loadIndexSymbols(universe: ScannerUniverse): Promise<Set<string> | null> {
   if (universe === 'all') return null;
+
+  if (INTERNATIONAL_UNIVERSES.has(universe)) {
+    const symbols = await loadBundledUniverseSymbols(universe);
+    return symbols.length > 0 ? new Set(symbols) : null;
+  }
 
   const fileName = universe === 'nifty100' ? 'nifty100.txt' : 'nifty500.txt';
   const bundled = await readSymbolListFile(fileName);
@@ -139,7 +170,19 @@ async function loadSectorMap(): Promise<Map<string, ScannerSector>> {
 }
 
 export function isValidScannerUniverse(value: unknown): value is ScannerUniverse {
-  return value === 'nifty100' || value === 'nifty500' || value === 'all' || value === 'custom';
+  return (
+    value === 'nifty100' ||
+    value === 'nifty500' ||
+    value === 'all' ||
+    value === 'us100' ||
+    value === 'bitcoin20' ||
+    value === 'commodities' ||
+    value === 'custom'
+  );
+}
+
+export function isInternationalUniverse(universe: ScannerUniverse): boolean {
+  return INTERNATIONAL_UNIVERSES.has(universe);
 }
 
 export function isValidScannerSector(value: unknown): value is ScannerSector {
@@ -181,15 +224,22 @@ export async function resolveScannerSymbols(
       .sort((a, b) => a.symbol.localeCompare(b.symbol));
   }
 
-  const master = await nseSymbolService.loadSymbols();
   const indexSet = await loadIndexSymbols(universe);
+  if (indexSet == null) {
+    const master = await nseSymbolService.loadSymbols();
+    return master.sort((a, b) => a.symbol.localeCompare(b.symbol));
+  }
 
-  let rows =
-    indexSet == null
-      ? master
-      : master.filter((r) => indexSet.has(r.symbol));
+  if (INTERNATIONAL_UNIVERSES.has(universe)) {
+    return [...indexSet]
+      .sort()
+      .map((symbol) => ({ symbol, company: symbol }));
+  }
 
-  if (rows.length === 0 && indexSet != null) {
+  const master = await nseSymbolService.loadSymbols();
+  let rows = master.filter((r) => indexSet.has(r.symbol));
+
+  if (rows.length === 0) {
     rows = [...indexSet].sort().map((symbol) => ({
       symbol,
       company: master.find((m) => m.symbol === symbol)?.company ?? symbol,
@@ -212,10 +262,13 @@ export async function getScannerOptions(): Promise<{
   universes: Array<{ id: ScannerUniverse; label: string; estimatedCount: number }>;
   sectors: Array<{ id: ScannerSector; label: string }>;
 }> {
-  const [n100, n500, allRows] = await Promise.all([
+  const [n100, n500, allRows, us100, bitcoin20, commodities] = await Promise.all([
     resolveScannerSymbols('nifty100', 'all'),
     resolveScannerSymbols('nifty500', 'all'),
     resolveScannerSymbols('all', 'all'),
+    resolveScannerSymbols('us100', 'all'),
+    resolveScannerSymbols('bitcoin20', 'all'),
+    resolveScannerSymbols('commodities', 'all'),
   ]);
 
   return {
@@ -223,6 +276,9 @@ export async function getScannerOptions(): Promise<{
       { id: 'nifty100', label: UNIVERSE_LABELS.nifty100, estimatedCount: n100.length },
       { id: 'nifty500', label: UNIVERSE_LABELS.nifty500, estimatedCount: n500.length },
       { id: 'all', label: UNIVERSE_LABELS.all, estimatedCount: allRows.length },
+      { id: 'us100', label: UNIVERSE_LABELS.us100, estimatedCount: us100.length },
+      { id: 'bitcoin20', label: UNIVERSE_LABELS.bitcoin20, estimatedCount: bitcoin20.length },
+      { id: 'commodities', label: UNIVERSE_LABELS.commodities, estimatedCount: commodities.length },
       { id: 'custom', label: UNIVERSE_LABELS.custom, estimatedCount: 0 },
     ],
     sectors: (Object.keys(SECTOR_LABELS) as ScannerSector[]).map((id) => ({

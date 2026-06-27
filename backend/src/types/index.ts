@@ -131,6 +131,13 @@ export interface TradeResult {
   newAthAfterFtt: boolean | null;
   lowHitBuyAfterFtt: boolean | null;
   lowHitSlAfterFtt: boolean | null;
+  targetAfterPullbackHit: boolean | null;
+  targetAfterPullbackDate: string | null;
+  stoplossAfterPullbackHit: boolean | null;
+  stoplossAfterPullbackDate: string | null;
+  firstHitAfterPullback: 'TARGET' | 'STOPLOSS' | null;
+  firstHitAfterPullbackDate: string | null;
+  firstHitAfterPullbackDays: number | null;
   targetAfterRecovery: boolean | null;
   newAthAfterRecoveryTarget: boolean | null;
   newAthAfterFttDate: string | null;
@@ -332,7 +339,14 @@ export interface ScannerSignal {
 
 export type ScannerPeriod = '6m' | '1y' | '3y' | '5y' | 'all';
 
-export type ScannerUniverse = 'nifty100' | 'nifty500' | 'all' | 'custom';
+export type ScannerUniverse =
+  | 'nifty100'
+  | 'nifty500'
+  | 'all'
+  | 'us100'
+  | 'bitcoin20'
+  | 'commodities'
+  | 'custom';
 
 export type ScannerSector =
   | 'all'
@@ -370,14 +384,15 @@ export interface PortfolioSimConfig {
   maxHoldings: number;
   targetPercent: number;
   stoplossPercent: number;
-  /** When false, all buy signals are taken (no max-holdings cap). Position size still uses maxHoldings in the divisor. */
-  enforceMaxHoldings?: boolean;
 }
+
+export type PortfolioEntryType = 'breakout' | 'pullback';
 
 export type PortfolioExitReason = 'TARGET' | 'STOPLOSS';
 
 export interface PortfolioClosedTrade {
   symbol: string;
+  entryType: PortfolioEntryType;
   buyDate: string;
   sellDate: string;
   buyPrice: number;
@@ -386,11 +401,14 @@ export interface PortfolioClosedTrade {
   quantity: number;
   profitLoss: number;
   returnPct: number;
+  holdingDays: number;
   exitReason: PortfolioExitReason;
+  principalReturned: number;
 }
 
 export interface PortfolioOpenPosition {
   symbol: string;
+  entryType: PortfolioEntryType;
   buyDate: string;
   buyPrice: number;
   quantity: number;
@@ -399,6 +417,7 @@ export interface PortfolioOpenPosition {
   marketValue: number;
   unrealizedProfit: number;
   principalReturned: number;
+  isRunner: boolean;
 }
 
 export interface PortfolioSimMetrics {
@@ -406,7 +425,15 @@ export interface PortfolioSimMetrics {
   initialCapital: number;
   availableCash: number;
   portfolioValue: number;
+  investedAmount: number;
+  activeInvestedValue: number;
+  runnerValue: number;
+  idleCash: number;
+  cashUtilizationPct: number;
   investmentPerStock: number;
+  maxHoldings: number;
+  activePositions: number;
+  runnerPositions: number;
   openPositions: number;
   closedPositions: number;
   totalTrades: number;
@@ -420,10 +447,67 @@ export interface PortfolioSimMetrics {
   maxDrawdownPct: number;
 }
 
-export type IgnoredBuyReason = 'max_holdings' | 'insufficient_cash';
+export type IgnoredBuyReason = 'insufficient_cash';
+
+export interface PortfolioTimeSnapshot {
+  date: string;
+  portfolioValue: number;
+  availableCash: number;
+  investedAmount: number;
+  activeInvestedValue: number;
+  runnerValue: number;
+  cashUtilizationPct: number;
+  activePositions: number;
+  runnerPositions: number;
+  investmentPerStock: number;
+  drawdownPct: number;
+}
+
+export interface PortfolioPerformanceSummary {
+  initialCapital: number;
+  finalPortfolioValue: number;
+  totalReturnPct: number;
+  cagrPercent: number | null;
+  annualizedReturnPct: number | null;
+  totalRealizedProfit: number;
+  totalUnrealizedProfit: number;
+  maxDrawdownPct: number;
+  averageCashUtilizationPct: number;
+  maxCashUtilizationPct: number;
+  minCashUtilizationPct: number;
+  highestPortfolioValue: number;
+  largestWinningTrade: number;
+  largestLosingTrade: number;
+  averageHoldingDays: number;
+  averageInvestmentPerStock: number;
+  totalBuySignals: number;
+  executedBuySignals: number;
+  missedSignals: number;
+}
+
+export interface PortfolioTradeRecord {
+  symbol: string;
+  entryType: PortfolioEntryType;
+  simulationMode: PortfolioSimulationMode;
+  buyDate: string;
+  buyPrice: number;
+  investmentAmount: number;
+  quantity: number;
+  sellDate: string | null;
+  sellPrice: number | null;
+  principalReturned: number;
+  runnerValue: number;
+  realizedProfit: number;
+  unrealizedProfit: number;
+  returnPct: number | null;
+  holdingDays: number | null;
+  exitReason: PortfolioExitReason | 'OPEN' | 'RUNNER';
+  isRunner: boolean;
+}
 
 export interface IgnoredBuySignal {
   symbol: string;
+  entryType: PortfolioEntryType;
   entryDate: string;
   entryPrice: number;
   reason: IgnoredBuyReason;
@@ -436,9 +520,14 @@ export interface PortfolioSimResult {
   metrics: PortfolioSimMetrics;
   closedTrades: PortfolioClosedTrade[];
   openPositions: PortfolioOpenPosition[];
+  tradeHistory: PortfolioTradeRecord[];
+  snapshots: PortfolioTimeSnapshot[];
+  monthlyTimeline: PortfolioTimeSnapshot[];
+  performanceSummary: PortfolioPerformanceSummary;
   ignoredBuySignals: number;
   ignoredBuys: IgnoredBuySignal[];
   buysExecuted: number;
+  totalBuySignals: number;
 }
 
 export interface PortfolioComparisonResponse {
@@ -456,14 +545,8 @@ export interface BacktestPortfolioComparison {
   simulationStart: string | null;
   simulationEnd: string | null;
   config: PortfolioSimConfig;
-  /** Case 1: buy at breakout (after signal) — full exit & compound */
+  /** Case 1: breakout + pullback buys — complete exit on target or stop loss */
   case1: PortfolioSimResult;
-  /** Case 2: buy at breakout (after signal) — withdraw principal at target */
+  /** Case 2: breakout + pullback buys — withdraw principal at target */
   case2: PortfolioSimResult;
-  /** Case 3: breakout + FTT pullback buys — full exit & compound */
-  case3Compound: PortfolioSimResult;
-  /** Case 3: breakout + first FTT pullback — withdraw principal at target */
-  case3Withdraw: PortfolioSimResult;
-  /** Case 4: same entries as Case 3, no holding cap — buy every signal (full exit & compound) */
-  case4: PortfolioSimResult;
 }

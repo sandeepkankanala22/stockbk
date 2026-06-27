@@ -1,5 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
+import ExcelJS from 'exceljs';
 import type { ScannerJobState, ScannerPeriod, ScannerSector, ScannerSignal, ScannerUniverse } from '../types/index.js';
+import { formatDisplayDate } from '../utils/dateParser.js';
 import { scannerService, type ScannerProgress } from './scannerService.js';
 
 class ScannerJobManager {
@@ -133,6 +135,27 @@ class ScannerJobManager {
       );
     }
     return lines.join('\n');
+  }
+
+  /** Backtest upload format: Date + Symbol columns (e.g. "02 May 2025"). */
+  async signalsToBacktestExcel(signals: ScannerSignal[]): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Signals');
+    sheet.addRow(['Date', 'Symbol']);
+
+    const sorted = [...signals].sort((a, b) => {
+      const d = a.signalDate.localeCompare(b.signalDate);
+      if (d !== 0) return d;
+      return a.symbol.localeCompare(b.symbol);
+    });
+
+    for (const s of sorted) {
+      sheet.addRow([formatDisplayDate(s.signalDate), s.symbol]);
+    }
+
+    sheet.columns = [{ width: 16 }, { width: 14 }];
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
   }
 }
 

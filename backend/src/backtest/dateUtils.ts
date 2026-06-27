@@ -54,7 +54,7 @@ export function findBreakoutDate(
 ): BreakoutResult | null {
   for (const bar of bars) {
     if (bar.date < startScanDate) continue;
-    if (bar.high > buyPrice) {
+    if (bar.high >= buyPrice) {
       return { date: bar.date, high: bar.high };
     }
   }

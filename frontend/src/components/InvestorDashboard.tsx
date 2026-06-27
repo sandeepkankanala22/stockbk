@@ -16,8 +16,10 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  TableSortLabel,
+  Button,
+  Stack,
 } from '@mui/material';
+import DownloadIcon from '@mui/icons-material/Download';
 import {
   Line,
   LineChart,
@@ -29,17 +31,20 @@ import {
   ReferenceArea,
   ReferenceLine,
   Legend,
+  PieChart,
+  Pie,
+  Cell,
 } from 'recharts';
 import type { BacktestConfig, BenchmarkSeries, TradeResult } from '../types';
 import {
   buildBuyMonthTable,
-  buildFttPullbackCorrelationAnalysis,
-  buildFttPullbackTable,
   buildPortfolioInsightChart,
   CHART_PCT_FLOOR,
+  downloadAllTradesExport,
+  type BuyPathColumn,
   type DashboardMetricRow,
-  type FttPullbackRow,
   type InvestorDashboardData,
+  type SignalPullbackComparison,
 } from '../utils/investorDashboardBuilder';
 
 function formatPct(value: number | null): string {
@@ -47,13 +52,162 @@ function formatPct(value: number | null): string {
   return `${value.toFixed(2)}%`;
 }
 
-function formatDays(days: { min: number | null; avg: number | null; max: number | null } | null): string {
+function formatDaysCell(days: { min: number | null; avg: number | null; max: number | null } | null): string {
   if (!days) return '—';
   const parts: string[] = [];
   if (days.min != null) parts.push(`min ${days.min}`);
   if (days.avg != null) parts.push(`avg ${days.avg}`);
   if (days.max != null) parts.push(`max ${days.max}`);
   return parts.length > 0 ? parts.join(' · ') : '—';
+}
+
+function PathPieChart({ slices, total }: { slices: BuyPathColumn['pieSlices']; total: number }) {
+  if (total === 0 || slices.length === 0) {
+    return (
+      <Box sx={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Typography variant="body2" color="text.secondary">
+          No trades
+        </Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ width: '100%', height: 240 }}>
+      <ResponsiveContainer>
+        <PieChart>
+          <Pie
+            data={slices}
+            dataKey="value"
+            nameKey="name"
+            cx="50%"
+            cy="50%"
+            innerRadius={52}
+            outerRadius={88}
+            paddingAngle={2}
+            label={(props) => {
+              const p = props.payload as { name?: string; pct?: number } | undefined;
+              if (!p?.name) return '';
+              return `${p.name} ${(p.pct ?? 0).toFixed(0)}%`;
+            }}
+            labelLine={{ strokeWidth: 1 }}
+          >
+            {slices.map((slice) => (
+              <Cell key={slice.name} fill={slice.color} stroke="#fff" strokeWidth={2} />
+            ))}
+          </Pie>
+          <Tooltip
+            formatter={(value, name, item) => {
+              const v = typeof value === 'number' ? value : Number(value ?? 0);
+              const p = item?.payload as { pct?: number } | undefined;
+              return [`${v} (${(p?.pct ?? 0).toFixed(1)}%)`, String(name)];
+            }}
+          />
+          <Legend verticalAlign="bottom" height={36} />
+        </PieChart>
+      </ResponsiveContainer>
+    </Box>
+  );
+}
+
+function BuyPathColumnPanel({ column, accent }: { column: BuyPathColumn; accent: 'success' | 'warning' }) {
+  const headerBg =
+    accent === 'success' ? 'rgba(46, 125, 50, 0.1)' : 'rgba(237, 108, 2, 0.1)';
+  const borderColor = accent === 'success' ? 'success.main' : 'warning.main';
+
+  return (
+    <Paper
+      variant="outlined"
+      sx={{
+        height: '100%',
+        borderTop: 4,
+        borderColor,
+        overflow: 'hidden',
+      }}
+    >
+      <Box sx={{ px: 2, pt: 2, pb: 1, bgcolor: headerBg, textAlign: 'center' }}>
+        <Typography variant="h6" fontWeight={800}>
+          {column.title}
+        </Typography>
+      </Box>
+
+      <Box sx={{ px: 2, py: 1 }}>
+        <PathPieChart slices={column.pieSlices} total={column.totalTrades} />
+      </Box>
+
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell sx={{ fontWeight: 600 }}>Metric</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600, width: 72 }}>
+                Count
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600, width: 72 }}>
+                %
+              </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 600, minWidth: 150 }}>
+                Days (min · avg · max)
+              </TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            <TableRow sx={{ bgcolor: 'action.hover' }}>
+              <TableCell>
+                <Typography variant="body2" fontWeight={700}>
+                  No. of trades
+                </Typography>
+              </TableCell>
+              <TableCell align="right">
+                <Typography variant="body2" fontWeight={700}>
+                  {column.totalTrades}
+                </Typography>
+              </TableCell>
+              <TableCell align="right">
+                <Typography variant="body2" fontWeight={700}>
+                  {column.totalTrades > 0 ? '100%' : '—'}
+                </Typography>
+              </TableCell>
+              <TableCell align="right">—</TableCell>
+            </TableRow>
+            {column.metrics.map((m) => (
+              <TableRow key={m.label} hover>
+                <TableCell>
+                  <Typography variant="body2">{m.label}</Typography>
+                </TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" fontWeight={600}>
+                    {m.count}
+                  </Typography>
+                </TableCell>
+                <TableCell align="right">{formatPct(m.pct)}</TableCell>
+                <TableCell align="right">
+                  <Typography variant="body2" color="text.secondary">
+                    {formatDaysCell(m.days)}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    </Paper>
+  );
+}
+
+function SignalPullbackDashboard({ data }: { data: SignalPullbackComparison }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+        gap: 2,
+      }}
+    >
+      <BuyPathColumnPanel column={data.signalBuys} accent="success" />
+      <BuyPathColumnPanel column={data.pullbackBuys} accent="warning" />
+    </Box>
+  );
 }
 
 function MetricTable({
@@ -127,7 +281,7 @@ function MetricTable({
                 </TableCell>
                 <TableCell align="right">
                   <Typography variant="body2" color="text.secondary">
-                    {formatDays(row.days)}
+                    {formatDaysCell(row.days)}
                   </Typography>
                 </TableCell>
               </TableRow>
@@ -367,209 +521,6 @@ function monthTick(v: string): string {
   return `${d.toLocaleString('en-US', { month: 'short' })}-${String(d.getFullYear()).slice(-2)}`;
 }
 
-function formatPctChg(value: number | null): string {
-  if (value == null) return '—';
-  const sign = value >= 0 ? '+' : '';
-  return `${sign}${value.toFixed(2)}%`;
-}
-
-function formatDaysTiming(days: {
-  min: number | null;
-  avg: number | null;
-  max: number | null;
-}): string {
-  const parts: string[] = [];
-  if (days.min != null) parts.push(`min ${days.min}`);
-  if (days.avg != null) parts.push(`avg ${days.avg}`);
-  if (days.max != null) parts.push(`max ${days.max}`);
-  return parts.length > 0 ? parts.join(' · ') : '—';
-}
-
-type FttPullbackSortKey = keyof Pick<
-  FttPullbackRow,
-  | 'symbol'
-  | 'signalDate'
-  | 'buyDate'
-  | 'fttDate'
-  | 'pullbackDate'
-  | 'daysSignalToPullback'
-  | 'pctFromBuyAfterPullback'
->;
-
-function compareFttPullbackRows(
-  a: FttPullbackRow,
-  b: FttPullbackRow,
-  sortKey: FttPullbackSortKey
-): number {
-  switch (sortKey) {
-    case 'symbol':
-      return a.symbol.localeCompare(b.symbol);
-    case 'signalDate':
-      return a.signalDate.localeCompare(b.signalDate);
-    case 'buyDate':
-      return a.buyDate.localeCompare(b.buyDate);
-    case 'fttDate':
-      return a.fttDate.localeCompare(b.fttDate);
-    case 'pullbackDate':
-      return a.pullbackDate.localeCompare(b.pullbackDate);
-    case 'daysSignalToPullback':
-      return a.daysSignalToPullback - b.daysSignalToPullback;
-    case 'pctFromBuyAfterPullback':
-      return (
-        (a.pctFromBuyAfterPullback ?? Number.NEGATIVE_INFINITY) -
-        (b.pctFromBuyAfterPullback ?? Number.NEGATIVE_INFINITY)
-      );
-    default:
-      return 0;
-  }
-}
-
-function FttPullbackTable({ results }: { results: TradeResult[] }) {
-  const baseRows = useMemo(() => buildFttPullbackTable(results), [results]);
-  const analysis = useMemo(() => buildFttPullbackCorrelationAnalysis(baseRows), [baseRows]);
-  const [sortKey, setSortKey] = useState<FttPullbackSortKey>('pctFromBuyAfterPullback');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
-
-  const rows = useMemo(() => {
-    const sorted = [...baseRows].sort((a, b) => compareFttPullbackRows(a, b, sortKey));
-    return sortDir === 'asc' ? sorted : sorted.reverse();
-  }, [baseRows, sortKey, sortDir]);
-
-  const handleSort = (key: FttPullbackSortKey) => {
-    if (sortKey === key) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir(key === 'symbol' ? 'asc' : key === 'pctFromBuyAfterPullback' ? 'asc' : 'desc');
-    }
-  };
-
-  const sortLabel = (key: FttPullbackSortKey, label: string, align: 'left' | 'right' = 'left') => (
-    <TableCell align={align} sortDirection={sortKey === key ? sortDir : false}>
-      <TableSortLabel
-        active={sortKey === key}
-        direction={sortKey === key ? sortDir : 'asc'}
-        onClick={() => handleSort(key)}
-      >
-        {label}
-      </TableSortLabel>
-    </TableCell>
-  );
-
-  if (baseRows.length === 0) return null;
-
-  return (
-    <Paper sx={{ p: 2, mt: 2, borderLeft: 4, borderColor: 'success.main' }}>
-      <Typography variant="subtitle1" fontWeight={700} gutterBottom>
-        Pullback to Buy After FTT
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Stocks that hit target first, then low touched buy price again. Signal date = upload min date.
-        Click column headers to sort.
-      </Typography>
-
-      {analysis && (
-        <Paper variant="outlined" sx={{ p: 1.5, mb: 2, bgcolor: 'action.hover' }}>
-          <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-            Signal ↔ Pullback timing analysis
-          </Typography>
-          <Typography variant="body2" sx={{ mb: 1 }}>
-            <strong>Days (signal → pullback):</strong>{' '}
-            {formatDaysTiming(analysis.signalToPullback)}
-            {' · '}
-            <strong>Days (FTT → pullback):</strong> {formatDaysTiming(analysis.fttToPullback)}
-          </Typography>
-          <Box component="ul" sx={{ m: 0, pl: 2.5 }}>
-            {analysis.insights.map((line) => (
-              <Typography key={line} component="li" variant="body2" sx={{ mb: 0.5 }}>
-                {line}
-              </Typography>
-            ))}
-          </Box>
-          {analysis.bySignalMonth.length > 1 && (
-            <TableContainer sx={{ mt: 1.5, maxHeight: 200 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 600 }}>Signal Month</TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Count
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg Days → Pullback
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Median Days
-                    </TableCell>
-                    <TableCell align="right" sx={{ fontWeight: 600 }}>
-                      Avg % After Pullback
-                    </TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {analysis.bySignalMonth.map((m) => (
-                    <TableRow key={m.month}>
-                      <TableCell>{m.month}</TableCell>
-                      <TableCell align="right">{m.count}</TableCell>
-                      <TableCell align="right">{m.avgDaysToPullback}</TableCell>
-                      <TableCell align="right">{m.medianDaysToPullback}</TableCell>
-                      <TableCell align="right">
-                        {m.avgPctAfterPullback != null ? formatPctChg(m.avgPctAfterPullback) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </Paper>
-      )}
-
-      <TableContainer sx={{ maxHeight: 420 }}>
-        <Table size="small" stickyHeader>
-          <TableHead>
-            <TableRow>
-              {sortLabel('symbol', 'Symbol')}
-              {sortLabel('signalDate', 'Signal Date')}
-              {sortLabel('buyDate', 'Buy Date')}
-              {sortLabel('fttDate', 'FTT Date')}
-              {sortLabel('pullbackDate', 'Pullback to Buy Date')}
-              {sortLabel('daysSignalToPullback', 'Days (signal → pullback)', 'right')}
-              {sortLabel('pctFromBuyAfterPullback', '% Chg from Buy (after pullback)', 'right')}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((row) => {
-              const pct = row.pctFromBuyAfterPullback;
-              const pctColor =
-                pct == null ? 'text.secondary' : pct >= 0 ? 'success.main' : 'error.main';
-              return (
-                <TableRow key={`${row.symbol}|${row.signalDate}`} hover>
-                  <TableCell>
-                    <Typography variant="body2" fontWeight={600}>
-                      {row.symbol}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>{row.signalDate}</TableCell>
-                  <TableCell>{row.buyDate}</TableCell>
-                  <TableCell>{row.fttDate}</TableCell>
-                  <TableCell>{row.pullbackDate}</TableCell>
-                  <TableCell align="right">{row.daysSignalToPullback}</TableCell>
-                  <TableCell align="right">
-                    <Typography variant="body2" fontWeight={600} sx={{ color: pctColor }}>
-                      {formatPctChg(pct)}
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
-        </Table>
-      </TableContainer>
-    </Paper>
-  );
-}
-
 function BuyMonthTable({ results }: { results: TradeResult[] }) {
   const rows = useMemo(() => buildBuyMonthTable(results), [results]);
   if (rows.length === 0) return null;
@@ -639,40 +590,38 @@ export default function InvestorDashboard({
 }) {
   return (
     <Box>
-      <MetricTable
-        title="Overview — Hit Sequence"
-        subtitle="Risk/reward split across the full universe (one row per symbol, earliest min date)"
-        rows={data.overview}
-        accent="neutral"
-      />
+      <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1.5 }}>
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<DownloadIcon />}
+          onClick={() => downloadAllTradesExport(results)}
+        >
+          Download All Trades (Signal + Pullback)
+        </Button>
+      </Stack>
 
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' },
-          gap: 2,
-          mt: 2,
-        }}
-      >
+      {data.signalPullback ? (
+        <SignalPullbackDashboard data={data.signalPullback} />
+      ) : (
         <MetricTable
-          title="FTT Data — Reward Path"
-          subtitle={`${data.fttData[0]?.count ?? 0} stocks hit target first — % shown vs FTT universe`}
-          rows={data.fttData}
-          accent="success"
-          pctColumnLabel="% of FTT"
-          useBranchPct
+          title="Overview — Hit Sequence"
+          subtitle="Risk/reward split across the full universe"
+          rows={data.overview}
+          accent="neutral"
         />
+      )}
+
+      <Box sx={{ mt: 2 }}>
         <MetricTable
-          title="FSL Data — Recovery Path"
-          subtitle={`${data.fslData[1]?.count ?? 0} first-hit SL — sub-rows % vs FSL universe`}
+          title="FSL Recovery Path"
+          subtitle={`${data.fslData[1]?.count ?? 0} first-hit stop loss — recovery sub-metrics`}
           rows={data.fslData}
           accent="warning"
-          pctColumnLabel="% of base"
+          pctColumnLabel="% of FSL"
           useBranchPct
         />
       </Box>
-
-      <FttPullbackTable results={results} />
 
       <BuyMonthTable results={results} />
 

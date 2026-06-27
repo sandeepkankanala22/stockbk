@@ -78,6 +78,13 @@ export class BacktestEngine {
       newAthAfterFtt: null,
       lowHitBuyAfterFtt: null,
       lowHitSlAfterFtt: null,
+      targetAfterPullbackHit: null,
+      targetAfterPullbackDate: null,
+      stoplossAfterPullbackHit: null,
+      stoplossAfterPullbackDate: null,
+      firstHitAfterPullback: null,
+      firstHitAfterPullbackDate: null,
+      firstHitAfterPullbackDays: null,
       targetAfterRecovery: null,
       newAthAfterRecoveryTarget: null,
       newAthAfterFttDate: null,
@@ -94,9 +101,6 @@ export class BacktestEngine {
     );
 
     if (error || bars.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7542/ingest/38dceb47-4325-4db9-870b-5ac797cdab44',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d96eef'},body:JSON.stringify({sessionId:'d96eef',location:'BacktestEngine.ts:processSymbol',message:'Symbol data error',data:{symbol:symbolJob.symbol,yahooSymbol:symbolJob.yahooSymbol,error:error??'empty bars'},timestamp:Date.now(),hypothesisId:'B'})}).catch(()=>{});
-      // #endregion
       return {
         ...base,
         result: 'ERROR',
@@ -178,8 +182,10 @@ export class BacktestEngine {
       bars,
       buyPrice,
       targetPrice,
+      stoplossPrice,
       hitSeq,
-      scenario2
+      scenario2,
+      config.sameDayHitMode
     );
 
     let exitPrice: number | null = null;
@@ -224,6 +230,13 @@ export class BacktestEngine {
       newAthAfterFtt: investorPaths.newAthAfterFtt,
       lowHitBuyAfterFtt: investorPaths.lowHitBuyAfterFtt,
       lowHitSlAfterFtt: investorPaths.lowHitSlAfterFtt,
+      targetAfterPullbackHit: investorPaths.targetAfterPullbackHit,
+      targetAfterPullbackDate: investorPaths.targetAfterPullbackDate,
+      stoplossAfterPullbackHit: investorPaths.stoplossAfterPullbackHit,
+      stoplossAfterPullbackDate: investorPaths.stoplossAfterPullbackDate,
+      firstHitAfterPullback: investorPaths.firstHitAfterPullback,
+      firstHitAfterPullbackDate: investorPaths.firstHitAfterPullbackDate,
+      firstHitAfterPullbackDays: investorPaths.firstHitAfterPullbackDays,
       targetAfterRecovery: investorPaths.targetAfterRecovery,
       newAthAfterRecoveryTarget: investorPaths.newAthAfterRecoveryTarget,
       newAthAfterFttDate: investorPaths.newAthAfterFttDate,
@@ -242,28 +255,19 @@ export class BacktestEngine {
   ): Promise<TradeResult[]> {
     const total = symbolJobs.length;
     let completed = 0;
-    const jobStart = Date.now();
     const limit = pLimit(appConfig.symbolConcurrency);
 
     const results = await Promise.all(
       symbolJobs.map((job) =>
         limit(async () => {
           onProgress?.(completed, total, job.symbol);
-          const symbolStart = Date.now();
           const result = await this.processSymbol(job, config);
           completed++;
           onProgress?.(completed, total, job.symbol);
-          // #region agent log
-          fetch('http://127.0.0.1:7542/ingest/38dceb47-4325-4db9-870b-5ac797cdab44',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d96eef'},body:JSON.stringify({sessionId:'d96eef',location:'BacktestEngine.ts:generateResults',message:'Symbol processed',data:{symbol:job.symbol,result:result.result,elapsedMs:Date.now()-symbolStart,completed,total},timestamp:Date.now(),hypothesisId:'PERF',runId:'post-fix'})}).catch(()=>{});
-          // #endregion
           return result;
         })
       )
     );
-
-    // #region agent log
-    fetch('http://127.0.0.1:7542/ingest/38dceb47-4325-4db9-870b-5ac797cdab44',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d96eef'},body:JSON.stringify({sessionId:'d96eef',location:'BacktestEngine.ts:generateResults',message:'Backtest job complete',data:{totalSymbols:total,totalElapsedMs:Date.now()-jobStart},timestamp:Date.now(),hypothesisId:'PERF',runId:'post-fix'})}).catch(()=>{});
-    // #endregion
 
     return results;
   }

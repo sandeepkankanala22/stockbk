@@ -13,15 +13,17 @@ function plan(
 ): SignalExitPlan {
   const target = entry * 1.3;
   const sl = entry * 0.7;
+  const lastDate = overrides.lastDate ?? signalDate;
   return {
     signalKey: key,
     symbol,
     signalDate,
+    entryType: 'breakout' as const,
     entryPrice: entry,
     targetPrice: target,
     stoplossPrice: sl,
     lastPrice: entry,
-    lastDate: signalDate,
+    lastDate,
     fullExitDate: null,
     fullExitPrice: null,
     fullExitReason: null,
@@ -31,6 +33,10 @@ function plan(
     remainderSlPrice: null,
     slBeforeTargetDate: null,
     slBeforeTargetPrice: null,
+    priceSeries: [
+      { date: signalDate, close: entry },
+      { date: lastDate, close: overrides.lastPrice ?? entry },
+    ],
     ...overrides,
   };
 }
@@ -43,40 +49,57 @@ const config: PortfolioSimConfig = {
 };
 
 describe('portfolioSimulator', () => {
-  it('invests availableCash / maxHoldings per new position', () => {
+  it('invests portfolioValue / maxHoldings per new position', () => {
     const p1 = plan('A:2024-01-01', 'A', '2024-01-01', 100, {
       fullExitDate: '2024-06-01',
       fullExitPrice: 130,
       fullExitReason: 'TARGET',
       lastDate: '2024-06-01',
+      priceSeries: [
+        { date: '2024-01-01', close: 100 },
+        { date: '2024-06-01', close: 130 },
+      ],
     });
     const result = runPortfolioSimulation([p1], config, 'compound');
     assert.equal(result.closedTrades.length, 1);
     assert.equal(result.closedTrades[0].investmentAmount, 50_000);
     assert.ok(result.metrics.availableCash > config.initialCapital);
+    assert.ok(result.snapshots.length > 0);
+    assert.ok(result.monthlyTimeline.length > 0);
   });
 
-  it('ignores buys when max holdings reached', () => {
-    const plans = Array.from({ length: 25 }, (_, i) => {
+  it('does not block buys due to position count — only insufficient cash', () => {
+    const plans = Array.from({ length: 5 }, (_, i) => {
       const d = `2024-${String(i + 1).padStart(2, '0')}-01`;
-      return plan(`S${i}:${d}`, `S${i}`, d, 100);
+      return plan(`S${i}:${d}`, `S${i}`, d, 100, {
+        lastDate: d,
+        priceSeries: [{ date: d, close: 100 }],
+      });
     });
     const result = runPortfolioSimulation(plans, config, 'compound');
-    assert.equal(result.metrics.openPositions, 20);
-    assert.ok(result.ignoredBuySignals >= 5);
+    assert.equal(result.buysExecuted, 5);
+    assert.equal(result.ignoredBuySignals, 0);
+    assert.ok(result.ignoredBuys.every((b) => b.reason === 'insufficient_cash'));
   });
 
-  it('mode 2 withdraws principal at target and keeps profit invested', () => {
+  it('mode 2 withdraws principal at target and keeps runner invested', () => {
     const p = plan('B:2024-01-01', 'B', '2024-01-01', 100, {
       partialTargetDate: '2024-03-01',
       partialTargetPrice: 130,
       lastPrice: 125,
       lastDate: '2024-12-01',
+      priceSeries: [
+        { date: '2024-01-01', close: 100 },
+        { date: '2024-03-01', close: 130 },
+        { date: '2024-12-01', close: 125 },
+      ],
     });
     const result = runPortfolioSimulation([p], config, 'withdraw_principal');
     assert.equal(result.closedTrades.length, 0);
     assert.equal(result.openPositions.length, 1);
     assert.equal(result.openPositions[0].principalReturned, 50_000);
+    assert.equal(result.openPositions[0].isRunner, true);
+    assert.equal(result.metrics.runnerPositions, 1);
     assert.ok(result.metrics.availableCash >= 50_000);
   });
 
@@ -85,8 +108,14 @@ describe('portfolioSimulator', () => {
       fullExitDate: '2024-02-01',
       fullExitPrice: 130,
       fullExitReason: 'TARGET',
+      priceSeries: [
+        { date: '2024-01-01', close: 100 },
+        { date: '2024-02-01', close: 130 },
+      ],
     });
-    const p2 = plan('B:2024-03-01', 'B', '2024-03-01', 100);
+    const p2 = plan('B:2024-03-01', 'B', '2024-03-01', 100, {
+      priceSeries: [{ date: '2024-03-01', close: 100 }],
+    });
     const result = runPortfolioSimulation([p1, p2], config, 'compound');
     assert.equal(result.closedTrades.length, 1);
     assert.equal(result.closedTrades[0].investmentAmount, 50_000);

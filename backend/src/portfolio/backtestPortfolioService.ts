@@ -6,7 +6,8 @@ import type {
   PortfolioSimConfig,
   TradeResult,
 } from '../types/index.js';
-import { resolveEntryExitPlan } from './portfolioExitResolver.js';
+import type { SameDayHitMode } from '../types/index.js';
+import { resolveBacktestEntryPlan, type SignalExitPlan } from './portfolioExitResolver.js';
 import { runPortfolioSimulation } from './portfolioSimulator.js';
 
 export interface BacktestPortfolioRequest {
@@ -91,19 +92,28 @@ function dedupeEntries(entries: EntryCandidate[]): EntryCandidate[] {
 
 async function resolvePlans(
   entries: EntryCandidate[],
+  trades: TradeResult[],
   targetPercent: number,
-  stoplossPercent: number
-) {
+  stoplossPercent: number,
+  sameDayHitMode: SameDayHitMode
+): Promise<SignalExitPlan[]> {
+  const tradeByKey = new Map(trades.map((t) => [`${t.symbol}:${t.minDate}`, t]));
   const limit = pLimit(config.scannerConcurrency);
-  return (
-    await Promise.all(
-      entries.map((e) =>
-        limit(() =>
-          resolveEntryExitPlan(e.symbol, e.entryDate, e.entryPrice, targetPercent, stoplossPercent)
-        )
-      )
+  const plans = await Promise.all(
+    entries.map((e) =>
+      limit(async () => {
+        const trade = tradeByKey.get(e.tradeKey);
+        return resolveBacktestEntryPlan(
+          e,
+          trade,
+          targetPercent,
+          stoplossPercent,
+          sameDayHitMode
+        );
+      })
     )
-  ).filter((p): p is NonNullable<typeof p> => p != null);
+  );
+  return plans.filter((p): p is SignalExitPlan => p != null);
 }
 
 export async function runBacktestPortfolioComparison(
@@ -122,7 +132,6 @@ export async function runBacktestPortfolioComparison(
     maxHoldings: request.maxHoldings ?? 20,
     targetPercent: request.targetPercent ?? job.config.targetPercent,
     stoplossPercent: request.stoplossPercent ?? job.config.stoplossPercent,
-    enforceMaxHoldings: true,
   };
 
   const trades = job.results;
@@ -130,18 +139,16 @@ export async function runBacktestPortfolioComparison(
   const pullbackEntries = buildPullbackBuyEntries(trades);
   const combinedEntries = buildCombinedPortfolioEntries(trades);
 
-  const [signalPlans, combinedPlans] = await Promise.all([
-    resolvePlans(signalEntries, simConfig.targetPercent, simConfig.stoplossPercent),
-    resolvePlans(combinedEntries, simConfig.targetPercent, simConfig.stoplossPercent),
-  ]);
+  const combinedPlans = await resolvePlans(
+    combinedEntries,
+    trades,
+    simConfig.targetPercent,
+    simConfig.stoplossPercent,
+    job.config.sameDayHitMode
+  );
 
-  const case1 = runPortfolioSimulation(signalPlans, simConfig, 'compound');
-  const case2 = runPortfolioSimulation(signalPlans, simConfig, 'withdraw_principal');
-  const case3Compound = runPortfolioSimulation(combinedPlans, simConfig, 'compound');
-  const case3Withdraw = runPortfolioSimulation(combinedPlans, simConfig, 'withdraw_principal');
-
-  const case4Config: PortfolioSimConfig = { ...simConfig, enforceMaxHoldings: false };
-  const case4 = runPortfolioSimulation(combinedPlans, case4Config, 'compound');
+  const case1 = runPortfolioSimulation(combinedPlans, simConfig, 'compound');
+  const case2 = runPortfolioSimulation(combinedPlans, simConfig, 'withdraw_principal');
 
   const dates = combinedPlans.map((p) => p.signalDate).sort();
 
@@ -154,8 +161,5 @@ export async function runBacktestPortfolioComparison(
     config: simConfig,
     case1,
     case2,
-    case3Compound,
-    case3Withdraw,
-    case4,
   };
 }

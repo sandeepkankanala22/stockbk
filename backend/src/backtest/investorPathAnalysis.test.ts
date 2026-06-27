@@ -27,7 +27,7 @@ describe('investorPathAnalysis', () => {
       stoplossPrice,
       'STOPLOSS_FIRST'
     );
-    const paths = analyzeInvestorPaths(bars, buyPrice, targetPrice, hitSeq, null);
+    const paths = analyzeInvestorPaths(bars, buyPrice, targetPrice, stoplossPrice, hitSeq, null, 'STOPLOSS_FIRST');
 
     assert.equal(hitSeq.firstHit, 'TARGET');
     assert.equal(paths.newAthAfterFtt, true);
@@ -61,7 +61,7 @@ describe('investorPathAnalysis', () => {
       targetPrice,
       'STOPLOSS_FIRST'
     );
-    const paths = analyzeInvestorPaths(bars, buyPrice, targetPrice, hitSeq, scenario2);
+    const paths = analyzeInvestorPaths(bars, buyPrice, targetPrice, stoplossPrice, hitSeq, scenario2, 'STOPLOSS_FIRST');
 
     assert.equal(hitSeq.firstHit, 'STOPLOSS');
     assert.equal(scenario2?.recoveredToBuyAfterSl, true);
@@ -69,5 +69,69 @@ describe('investorPathAnalysis', () => {
     assert.equal(paths.newAthAfterRecoveryTarget, true);
     assert.equal(paths.targetAfterRecoveryDate, '2013-06-12');
     assert.equal(paths.newAthAfterRecoveryTargetDate, '2013-06-15');
+  });
+
+  it('detects target hit again after pullback to buy (post-pullback +30%)', () => {
+    const bars: OhlcvBar[] = [
+      { date: '2013-06-05', open: 845, high: 860, low: 843, close: 855, volume: 1000 },
+      { date: '2013-06-06', open: 855, high: 1110, low: 850, close: 1100, volume: 1000 },
+      { date: '2013-06-07', open: 1100, high: 1105, low: 840, close: 860, volume: 1000 },
+      { date: '2013-06-12', open: 900, high: 1110, low: 890, close: 1100, volume: 1000 },
+    ];
+
+    const hitSeq = analyzeHitSequence(
+      bars,
+      buyDate,
+      targetPrice,
+      stoplossPrice,
+      'STOPLOSS_FIRST'
+    );
+    const paths = analyzeInvestorPaths(bars, buyPrice, targetPrice, stoplossPrice, hitSeq, null, 'STOPLOSS_FIRST');
+
+    assert.equal(paths.lowHitBuyAfterFtt, true);
+    assert.equal(paths.lowHitBuyAfterFttDate, '2013-06-07');
+    assert.equal(paths.targetAfterPullbackHit, true);
+    assert.equal(paths.targetAfterPullbackDate, '2013-06-12');
+    assert.equal(paths.stoplossAfterPullbackHit, false);
+    assert.equal(paths.firstHitAfterPullback, 'TARGET');
+    assert.equal(paths.firstHitAfterPullbackDate, '2013-06-12');
+  });
+
+  it('uses target-first on same candle after pullback when configured', () => {
+    const bars: OhlcvBar[] = [
+      { date: '2013-06-05', open: 845, high: 860, low: 843, close: 855, volume: 1000 },
+      { date: '2013-06-06', open: 855, high: 1110, low: 850, close: 1100, volume: 1000 },
+      { date: '2013-06-07', open: 1100, high: 1105, low: 840, close: 860, volume: 1000 },
+      { date: '2013-06-12', open: 900, high: 1110, low: 590, close: 900, volume: 1000 },
+    ];
+
+    const hitSeq = analyzeHitSequence(
+      bars,
+      buyDate,
+      targetPrice,
+      stoplossPrice,
+      'STOPLOSS_FIRST'
+    );
+    const stopFirst = analyzeInvestorPaths(
+      bars,
+      buyPrice,
+      targetPrice,
+      stoplossPrice,
+      hitSeq,
+      null,
+      'STOPLOSS_FIRST'
+    );
+    const targetFirst = analyzeInvestorPaths(
+      bars,
+      buyPrice,
+      targetPrice,
+      stoplossPrice,
+      hitSeq,
+      null,
+      'TARGET_FIRST'
+    );
+
+    assert.equal(stopFirst.firstHitAfterPullback, 'STOPLOSS');
+    assert.equal(targetFirst.firstHitAfterPullback, 'TARGET');
   });
 });

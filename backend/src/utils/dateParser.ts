@@ -83,4 +83,9 @@ export function diffDays(fromIso: string, toIso: string): number {
   return dayjs(toIso).diff(dayjs(fromIso), 'day');
 }
 
+/** Backtest upload format e.g. "02 May 2025" */
+export function formatDisplayDate(isoDate: string): string {
+  return dayjs(isoDate).format('DD MMM YYYY');
+}
+
 export { dayjs };

@@ -4,7 +4,7 @@ import { cacheService } from '../cache/cacheService.js';
 import type { OhlcvBar } from '../types/index.js';
 import { startOfMonthIso, todayIso } from '../utils/dateParser.js';
 import { isRateLimitError, withRetry } from '../utils/retry.js';
-import { toYahooSymbols } from '../utils/symbolUtils.js';
+import { toYahooSymbols, toYahooSymbolsPreferBare } from '../utils/symbolUtils.js';
 import { fetchYahooChart } from './yahooChartClient.js';
 
 type FetchResult = { bars: OhlcvBar[]; error?: string };
@@ -122,8 +122,14 @@ export class YahooFinanceService {
   }
 
   /** Try NSE (.NS) then BSE (.BO) for bare symbols. */
-  async fetchForSymbol(symbol: string, minDate: string): Promise<FetchResult> {
-    const candidates = toYahooSymbols(symbol);
+  async fetchForSymbol(
+    symbol: string,
+    minDate: string,
+    options?: { preferBare?: boolean }
+  ): Promise<FetchResult> {
+    const candidates = options?.preferBare
+      ? toYahooSymbolsPreferBare(symbol)
+      : toYahooSymbols(symbol);
     let lastError: string | undefined;
 
     for (const yahooSymbol of candidates) {
@@ -146,8 +152,14 @@ export class YahooFinanceService {
   }
 
   /** Monthly OHLC for scanner (interval=1mo). */
-  async fetchMonthlyForSymbol(symbol: string, startDate: string): Promise<FetchResult> {
-    const candidates = toYahooSymbols(symbol);
+  async fetchMonthlyForSymbol(
+    symbol: string,
+    startDate: string,
+    options?: { preferBare?: boolean }
+  ): Promise<FetchResult> {
+    const candidates = options?.preferBare
+      ? toYahooSymbolsPreferBare(symbol)
+      : toYahooSymbols(symbol);
     const period1 = startOfMonthIso(startDate);
     const period2 = todayIso();
     let lastError: string | undefined;

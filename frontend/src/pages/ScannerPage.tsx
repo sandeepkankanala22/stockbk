@@ -34,7 +34,7 @@ import type {
   ScannerSymbolOption,
   ScannerUniverse,
 } from '../types';
-import { getScannerExportCsvUrl } from '../services/api';
+import { getScannerExportCsvUrl, getScannerExportExcelUrl } from '../services/api';
 import {
   useScannerJob,
   useScannerOptions,
@@ -184,6 +184,12 @@ export default function ScannerPage() {
   const progress = status?.progress;
   const liveSignals = status?.signalsFoundCount ?? status?.signalCount ?? signals.length;
   const canExport = !!jobId && signals.length > 0 && (scanActive || status?.status === 'completed');
+  const sectorDisabled =
+    busy ||
+    universe === 'custom' ||
+    universe === 'us100' ||
+    universe === 'bitcoin20' ||
+    universe === 'commodities';
 
   return (
     <Container maxWidth="xl" sx={{ py: 3 }}>
@@ -262,7 +268,7 @@ export default function ScannerPage() {
           <FormControl
             size="small"
             sx={{ minWidth: 220 }}
-            disabled={busy || universe === 'custom'}
+            disabled={sectorDisabled}
           >
             <InputLabel id="scanner-sector-label">Sector</InputLabel>
             <Select
@@ -315,6 +321,16 @@ export default function ScannerPage() {
             Run Scanner
           </Button>
           <Button
+            variant="contained"
+            size="large"
+            startIcon={<DownloadIcon />}
+            href={canExport ? getScannerExportExcelUrl(jobId!) : undefined}
+            disabled={!canExport}
+            component="a"
+          >
+            Export for Backtest (Excel)
+          </Button>
+          <Button
             variant="outlined"
             size="large"
             startIcon={<DownloadIcon />}
@@ -322,7 +338,7 @@ export default function ScannerPage() {
             disabled={!canExport}
             component="a"
           >
-            Export CSV
+            Export Details (CSV)
           </Button>
         </Stack>
       </Paper>

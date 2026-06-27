@@ -61,7 +61,7 @@ export async function startScanner(
       return;
     }
     if (!isValidScannerUniverse(universe)) {
-      next(new AppError('Invalid universe. Use nifty100, nifty500, all, or custom', 'INVALID_UNIVERSE', 400));
+      next(new AppError('Invalid universe', 'INVALID_UNIVERSE', 400));
       return;
     }
     if (!isValidScannerSector(sector)) {
@@ -178,4 +178,44 @@ export function exportScannerCsv(req: Request, res: Response, next: NextFunction
     `attachment; filename="chartink-scanner-${jobId.slice(0, 8)}-${timestamp}.csv"`
   );
   res.send(csv);
+}
+
+export async function exportScannerExcel(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  const jobId = req.query.jobId as string;
+  if (!jobId) {
+    next(new AppError('jobId query parameter is required', 'MISSING_JOB_ID', 400));
+    return;
+  }
+
+  const job = scannerJobManager.getJob(jobId);
+  if (!job) {
+    next(new AppError('Scanner job not found', 'JOB_NOT_FOUND', 404));
+    return;
+  }
+
+  if (job.status !== 'completed' && job.status !== 'running') {
+    next(new AppError('Scanner job not ready for export', 'JOB_NOT_READY', 400));
+    return;
+  }
+
+  if (job.signals.length === 0) {
+    next(new AppError('No signals to export yet', 'NO_SIGNALS', 400));
+    return;
+  }
+
+  const buffer = await scannerJobManager.signalsToBacktestExcel(job.signals);
+  const timestamp = new Date().toISOString().slice(0, 10);
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  );
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="scanner-backtest-input-${jobId.slice(0, 8)}-${timestamp}.xlsx"`
+  );
+  res.send(buffer);
 }

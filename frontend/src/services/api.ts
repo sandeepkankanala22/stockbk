@@ -118,6 +118,10 @@ export function getScannerExportCsvUrl(jobId: string): string {
   return `/api/scanner/export/csv?jobId=${encodeURIComponent(jobId)}`;
 }
 
+export function getScannerExportExcelUrl(jobId: string): string {
+  return `/api/scanner/export/excel?jobId=${encodeURIComponent(jobId)}`;
+}
+
 export async function simulateBacktestPortfolio(
   request: BacktestPortfolioRequest
 ): Promise<BacktestPortfolioComparison> {

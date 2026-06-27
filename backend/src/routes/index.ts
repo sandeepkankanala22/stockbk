@@ -6,6 +6,7 @@ import { getModelInfo, predictJob, trainAndPredict, trainModel } from '../contro
 import { getStatus } from '../controllers/statusController.js';
 import {
   exportScannerCsv,
+  exportScannerExcel,
   getScannerOptionsHandler,
   getScannerResults,
   getScannerStatus,
@@ -49,6 +50,7 @@ router.post('/scanner/run', startScanner);
 router.get('/scanner/status', getScannerStatus);
 router.get('/scanner/results', getScannerResults);
 router.get('/scanner/export/csv', exportScannerCsv);
+router.get('/scanner/export/excel', exportScannerExcel);
 
 router.post('/portfolio/simulate', simulatePortfolio);
 router.post('/portfolio/simulate-backtest', simulateBacktestPortfolio);
