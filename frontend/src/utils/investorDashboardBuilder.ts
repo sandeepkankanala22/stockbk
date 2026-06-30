@@ -264,7 +264,7 @@ function firstHitAfterPullbackFromPath(trade: TradeResult): 'TARGET' | 'STOPLOSS
   return null;
 }
 
-function resolveFirstHitAfterPullback(trade: TradeResult): 'TARGET' | 'STOPLOSS' | 'OPEN' {
+export function resolveFirstHitAfterPullback(trade: TradeResult): 'TARGET' | 'STOPLOSS' | 'OPEN' {
   if (!trade.lowHitBuyAfterFttDate || trade.firstHit !== 'TARGET') return 'OPEN';
   if (trade.firstHitAfterPullback != null) {
     return trade.firstHitAfterPullback === 'TARGET' ? 'TARGET' : trade.firstHitAfterPullback === 'STOPLOSS' ? 'STOPLOSS' : 'OPEN';

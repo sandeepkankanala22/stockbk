@@ -31,6 +31,7 @@ import type {
 } from '../types';
 import { useBacktestPortfolioSimulation } from '../hooks/usePortfolio';
 import PortfolioAnalyticsCharts from './PortfolioAnalyticsCharts';
+import PortfolioMonthlyActivityCharts from './PortfolioMonthlyActivityCharts';
 
 function formatInr(value: number): string {
   return new Intl.NumberFormat('en-IN', {
@@ -457,6 +458,16 @@ export default function BacktestPortfolioPanel({ jobId, config }: BacktestPortfo
 
           <MissedSignalsPanel result={data.case1} caseLabel="Case 1" />
           <MissedSignalsPanel result={data.case2} caseLabel="Case 2" />
+
+          <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom>
+              Monthly Buy / Exit Activity — Case 1 (Complete Exit)
+            </Typography>
+            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 2 }}>
+              Full exit at +30% target or −30% stop from buy price. Bars show signal buys, pullback buys, and exits each month; line shows open holdings at month end.
+            </Typography>
+            <PortfolioMonthlyActivityCharts activity={data.case1.monthlyActivity ?? []} />
+          </Paper>
 
           <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
             <Typography variant="subtitle2" fontWeight={700} gutterBottom>Portfolio Analytics</Typography>

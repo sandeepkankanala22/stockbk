@@ -160,10 +160,6 @@ export class ExcelParserService {
     }));
 
     const parsed = processRows(rows);
-    const uniqueSymbols = this.extractUniqueSymbols(parsed.validRows);
-    // #region agent log
-    fetch('http://127.0.0.1:7542/ingest/38dceb47-4325-4db9-870b-5ac797cdab44',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'d96eef'},body:JSON.stringify({sessionId:'d96eef',location:'excelParserService.ts:parseCsv',message:'CSV parse summary',data:{validRows:parsed.validRows.length,invalidRows:parsed.invalidRows.length,uniqueSymbols:uniqueSymbols.size,invalidSample:parsed.invalidRows.slice(0,3).map(r=>({rawDate:r.rawDate,reason:r.reason}))},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     return parsed;
   }
 

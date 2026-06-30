@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { PortfolioSimConfig } from '../types/index.js';
 import type { SignalExitPlan } from './portfolioExitResolver.js';
-import { runPortfolioSimulation } from './portfolioSimulator.js';
+import { runPortfolioSimulation, buildMonthlyActivity } from './portfolioSimulator.js';
 
 function plan(
   key: string,
@@ -121,5 +121,52 @@ describe('portfolioSimulator', () => {
     assert.equal(result.closedTrades[0].investmentAmount, 50_000);
     assert.equal(result.openPositions.length, 1);
     assert.equal(result.openPositions[0].investmentAmount, 50_750);
+  });
+
+  it('builds monthly activity with buys, exits, and holdings', () => {
+    const signal = plan('A:2024-01-15', 'A', '2024-01-15', 100, {
+      fullExitDate: '2024-03-10',
+      fullExitPrice: 130,
+      fullExitReason: 'TARGET',
+      priceSeries: [
+        { date: '2024-01-15', close: 100 },
+        { date: '2024-03-10', close: 130 },
+      ],
+    });
+    const pullback = plan('B:2024-02-01', 'B', '2024-02-01', 100, {
+      entryType: 'pullback',
+      fullExitDate: '2024-04-01',
+      fullExitPrice: 70,
+      fullExitReason: 'STOPLOSS',
+      priceSeries: [
+        { date: '2024-02-01', close: 100 },
+        { date: '2024-04-01', close: 70 },
+      ],
+    });
+
+    const result = runPortfolioSimulation([signal, pullback], config, 'compound');
+    assert.ok(result.monthlyActivity.length > 0);
+
+    const jan = result.monthlyActivity.find((m) => m.month === '2024-01');
+    assert.ok(jan);
+    assert.equal(jan!.signalBuys, 1);
+    assert.equal(jan!.pullbackBuys, 0);
+    assert.equal(jan!.totalBuys, 1);
+
+    const feb = result.monthlyActivity.find((m) => m.month === '2024-02');
+    assert.ok(feb);
+    assert.equal(feb!.pullbackBuys, 1);
+    assert.equal(feb!.totalBuys, 1);
+
+    const mar = result.monthlyActivity.find((m) => m.month === '2024-03');
+    assert.ok(mar);
+    assert.equal(mar!.exits, 1);
+
+    const activity = buildMonthlyActivity(
+      result.tradeHistory,
+      result.monthlyTimeline,
+      'compound'
+    );
+    assert.equal(activity.length, result.monthlyActivity.length);
   });
 });

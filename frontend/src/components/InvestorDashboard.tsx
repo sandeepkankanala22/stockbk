@@ -46,6 +46,7 @@ import {
   type InvestorDashboardData,
   type SignalPullbackComparison,
 } from '../utils/investorDashboardBuilder';
+import ThreeBandDashboard from './ThreeBandDashboard';
 
 function formatPct(value: number | null): string {
   if (value == null) return '—';
@@ -600,6 +601,10 @@ export default function InvestorDashboard({
           Download All Trades (Signal + Pullback)
         </Button>
       </Stack>
+
+      <Box sx={{ mb: 3 }}>
+        <ThreeBandDashboard results={results} config={config} />
+      </Box>
 
       {data.signalPullback ? (
         <SignalPullbackDashboard data={data.signalPullback} />

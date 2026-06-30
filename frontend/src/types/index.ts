@@ -451,6 +451,16 @@ export interface PortfolioTimeSnapshot {
   drawdownPct: number;
 }
 
+export interface PortfolioMonthlyActivity {
+  month: string;
+  label: string;
+  signalBuys: number;
+  pullbackBuys: number;
+  totalBuys: number;
+  exits: number;
+  holdings: number;
+}
+
 export interface PortfolioPerformanceSummary {
   initialCapital: number;
   finalPortfolioValue: number;
@@ -539,6 +549,7 @@ export interface PortfolioSimResult {
   tradeHistory: PortfolioTradeRecord[];
   snapshots: PortfolioTimeSnapshot[];
   monthlyTimeline: PortfolioTimeSnapshot[];
+  monthlyActivity: PortfolioMonthlyActivity[];
   performanceSummary: PortfolioPerformanceSummary;
   ignoredBuySignals: number;
   ignoredBuys: IgnoredBuySignal[];

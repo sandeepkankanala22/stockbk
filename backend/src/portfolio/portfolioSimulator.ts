@@ -4,6 +4,7 @@ import type {
   IgnoredBuySignal,
   PortfolioClosedTrade,
   PortfolioEntryType,
+  PortfolioMonthlyActivity,
   PortfolioOpenPosition,
   PortfolioPerformanceSummary,
   PortfolioSimConfig,
@@ -231,6 +232,56 @@ function buildMonthlyTimeline(snapshots: PortfolioTimeSnapshot[]): PortfolioTime
   return [...byMonth.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
+export function buildMonthlyActivity(
+  tradeHistory: PortfolioTradeRecord[],
+  monthlyTimeline: PortfolioTimeSnapshot[],
+  mode: PortfolioSimulationMode
+): PortfolioMonthlyActivity[] {
+  const monthMap = new Map<string, PortfolioMonthlyActivity>();
+
+  const ensure = (key: string) => {
+    let row = monthMap.get(key);
+    if (!row) {
+      row = {
+        month: key,
+        label: dayjs(`${key}-01`).format('MMM YYYY'),
+        signalBuys: 0,
+        pullbackBuys: 0,
+        totalBuys: 0,
+        exits: 0,
+        holdings: 0,
+      };
+      monthMap.set(key, row);
+    }
+    return row;
+  };
+
+  for (const trade of tradeHistory) {
+    const buyKey = dayjs(trade.buyDate).format('YYYY-MM');
+    const buyRow = ensure(buyKey);
+    if (trade.entryType === 'breakout') {
+      buyRow.signalBuys += 1;
+    } else {
+      buyRow.pullbackBuys += 1;
+    }
+    buyRow.totalBuys += 1;
+
+    if (trade.sellDate) {
+      const exitKey = dayjs(trade.sellDate).format('YYYY-MM');
+      ensure(exitKey).exits += 1;
+    }
+  }
+
+  for (const snap of monthlyTimeline) {
+    const key = dayjs(snap.date).format('YYYY-MM');
+    const row = ensure(key);
+    row.holdings =
+      snap.activePositions + (mode === 'withdraw_principal' ? snap.runnerPositions : 0);
+  }
+
+  return [...monthMap.values()].sort((a, b) => a.month.localeCompare(b.month));
+}
+
 function buildPerformanceSummary(
   config: PortfolioSimConfig,
   snapshots: PortfolioTimeSnapshot[],
@@ -408,6 +459,7 @@ export function runPortfolioSimulation(
       tradeHistory: [],
       snapshots: [],
       monthlyTimeline: [],
+      monthlyActivity: [],
       performanceSummary,
       ignoredBuySignals: 0,
       ignoredBuys: [],
@@ -681,6 +733,8 @@ export function runPortfolioSimulation(
   };
 
   const monthlyTimeline = buildMonthlyTimeline(snapshots);
+  const tradeHistory = buildTradeHistory(mode, closedTrades, openList, lastDate);
+  const monthlyActivity = buildMonthlyActivity(tradeHistory, monthlyTimeline, mode);
   const performanceSummary = buildPerformanceSummary(
     config,
     snapshots,
@@ -691,8 +745,6 @@ export function runPortfolioSimulation(
     metrics
   );
 
-  const tradeHistory = buildTradeHistory(mode, closedTrades, openList, lastDate);
-
   return {
     metrics,
     closedTrades,
@@ -700,6 +752,7 @@ export function runPortfolioSimulation(
     tradeHistory,
     snapshots,
     monthlyTimeline,
+    monthlyActivity,
     performanceSummary,
     ignoredBuySignals: ignoredBuys.length,
     ignoredBuys,
